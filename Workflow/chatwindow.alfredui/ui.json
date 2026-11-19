@@ -86,7 +86,7 @@
                 "behaviour": {
                   "mode": "append"
                 },
-                "text": "…"
+                "text": "*Starting Claude…*"
               }
             }
           }
@@ -211,10 +211,67 @@
                 "region": "centre"
               },
               "type": "view",
-              "layout": "stack",
+              "layout": "border",
               "padding": 8,
+              "spacing": 8,
               "components": [
-                "{file:chatlist.json}"
+                {
+                  "constraints": {
+                    "region": "top"
+                  },
+                  "type": "view",
+                  "layout": "stack",
+                  "background": "#00000033",
+                  "cornerradius": 6,
+                  "components": [
+                    {
+                      "id": "chatSearch",
+                      "type": "textfield",
+                      "placeholder": "Search chats",
+                      "bordered": false,
+                      "background": null,
+                      "focusring": false,
+                      "font": {
+                        "size": 13
+                      },
+                      "textinsets": {
+                        "horizontal": 8,
+                        "vertical": 6
+                      },
+                      "tooltip": "Search Chats ⌘F",
+                      "events": [
+                        {
+                          "triggers": "changed",
+                          "action": {
+                            "type": "function",
+                            "src": "chatList",
+                            "args": "filterdata"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "constraints": {
+                    "region": "centre"
+                  },
+                  "type": "view",
+                  "layout": "stack",
+                  "components": [
+                    {
+                      "constraints": {
+                        "position": "centre"
+                      },
+                      "id": "chatListEmpty",
+                      "type": "label",
+                      "text": "No chats yet",
+                      "colour": "secondaryLabelColor",
+                      "hidden": true
+                    },
+                    "{file:chatlist.json}"
+                  ]
+                }
               ]
             }
           ]
@@ -391,6 +448,55 @@
               ]
             }
           ]
+        }
+      ],
+      "shortcuts": [
+        {
+          "shortcut": "⌘F",
+          "action": {
+            "type": "json",
+            "src": {
+              "update": {
+                "ids": {
+                  "chatSearch": {
+                    "focus": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "shortcut": "⌥⌘",
+          "action": {
+            "type": "script",
+            "src": "scripts/select-chat",
+            "args": "next"
+          }
+        },
+        {
+          "shortcut": "⌥⌘",
+          "action": {
+            "type": "script",
+            "src": "scripts/select-chat",
+            "args": "previous"
+          }
+        },
+        {
+          "shortcut": "⌘]",
+          "action": {
+            "type": "script",
+            "src": "scripts/select-chat",
+            "args": "next"
+          }
+        },
+        {
+          "shortcut": "⌘[",
+          "action": {
+            "type": "script",
+            "src": "scripts/select-chat",
+            "args": "previous"
+          }
         }
       ]
     }

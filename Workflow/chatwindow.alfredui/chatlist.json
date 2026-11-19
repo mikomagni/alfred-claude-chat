@@ -175,8 +175,85 @@
             }
           ]
         }
+      ],
+      "menu": [
+        {
+          "text": "Copy Last Message",
+          "action": [
+            {
+              "type": "script",
+              "src": "scripts/copy-response",
+              "args": "{data:uid}"
+            },
+            {
+              "type": "json",
+              "src": {
+                "copy": {
+                  "type": "text",
+                  "src": "{var:last_response}"
+                },
+                "sound": {
+                  "src": "Blow"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "text": "Delete Chat",
+          "action": [
+            {
+              "type": "script",
+              "src": "/usr/bin/trash",
+              "args": "{data:uid}"
+            },
+            {
+              "type": "json",
+              "variables": {
+                "remove_chat": "{data:uid}"
+              },
+              "src": {
+                "update": {
+                  "ids": {
+                    "chatList": {
+                      "data": {
+                        "modify": {
+                          "delete": {
+                            "uids": [
+                              "{var:remove_chat}"
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "script",
+              "src": "scripts/load-chat-list",
+              "args": "visibility"
+            }
+          ]
+        }
       ]
     }
   },
-  "hidden": true
+  "hidden": true,
+  "placeholder": "No chats found",
+  "data": {
+    "type": "basic",
+    "filter": {
+      "type": "basic",
+      "args": [
+        "chatName.text"
+      ],
+      "match": "{value:chatSearch.text}"
+    },
+    "src": []
+  }
 }

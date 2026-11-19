@@ -53,6 +53,7 @@ function run(argv) {
 
     response.variables = { current_chat_file: newChatFile }
     response.update.ids.chatList.hidden = false
+    response.update.ids.chatListEmpty = { hidden: true }
     response.update.ids.chatList.data = { modify: { insert: {
       position: "before",
       src: [{

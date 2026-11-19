@@ -243,7 +243,9 @@ The workflow finds Claude Code by itself in the usual install locations. If it c
 
 Launch the chat window with the `claude` keyword or the Hotkey.
 
-Each chat keeps its own Claude Code session, so follow-up questions have the full conversation. You can switch models between messages.</string>
+Each chat keeps its own Claude Code session, so follow-up questions have the full conversation. You can switch models between messages.
+
+Search your chats with the box above the list (⌘F), right-click a chat to copy or delete it, and move between chats with ⌘] and ⌘[.</string>
 	<key>uidata</key>
 	<dict>
 		<key>0B1294BB-0426-43AD-AA79-7E3310B76A08</key>
@@ -491,7 +493,7 @@ Each chat keeps its own Claude Code session, so follow-up questions have the ful
 		<string>api_key</string>
 	</array>
 	<key>version</key>
-	<string>1.0</string>
+	<string>1.1</string>
 	<key>webaddress</key>
 	<string>https://github.com/mikomagni/alfred-claude-chat</string>
 </dict>

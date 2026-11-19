@@ -91,9 +91,10 @@ function run(argv) {
 
     if (streamString.length === 0) return
 
+    // Claude Code has started but hasn't written anything yet
     return JSON.stringify({ update: { ids: { chatArea: {
       behaviour: { mode: "replacelast", scroll: "end" },
-      text: responseText
+      text: responseText || "*Thinking…*"
     }}}})
   }
 

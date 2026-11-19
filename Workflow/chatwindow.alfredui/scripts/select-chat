@@ -1,0 +1,19 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Move the selection in the chat list with the keyboard: "next" or "previous".
+// Does nothing while a reply is streaming, so the answer can't land in the wrong chat.
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function run(argv) {
+  const streamFile = `${envVar("alfred_workflow_cache")}/stream.txt`
+  if ($.NSFileManager.defaultManager.fileExistsAtPath(streamFile)) return
+
+  const direction = argv[0] === "previous" ? "selectprevious" : "selectnext"
+  return JSON.stringify({ functions: { ids: { chatList: direction } } })
+}
