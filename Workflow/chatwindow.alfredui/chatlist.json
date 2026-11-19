@@ -131,46 +131,145 @@
               "events": [
                 {
                   "triggers": "actioned",
-                  "confirm": {
-                    "message": "Delete Chat?",
-                    "informativetext": "It will be sent to the trash.",
-                    "confirmbuttontext": "Delete"
-                  },
-                  "action": [
-                    {
-                      "type": "script",
-                      "src": "scripts/delete-chat",
-                      "args": "{data:uid}"
+                  "action": {
+                    "type": "json",
+                    "variables": {
+                      "remove_chat": "{data:uid}"
                     },
-                    {
-                      "type": "json",
-                      "variables": {
-                        "remove_chat": "{data:uid}"
-                      },
-                      "src": {
-                        "update": {
-                          "ids": {
-                            "chatList": {
-                              "data": {
-                                "modify": {
-                                  "delete": {
-                                    "uids": [
-                                      "{var:remove_chat}"
-                                    ]
-                                  }
-                                }
-                              }
+                    "src": {
+                      "sheet": {
+                        "id": "confirmDelete",
+                        "root": {
+                          "constraints": {
+                            "size": {
+                              "width": 260
                             }
-                          }
+                          },
+                          "type": "view",
+                          "layout": "inline",
+                          "direction": "vertical",
+                          "padding": 20,
+                          "spacing": 10,
+                          "components": [
+                            {
+                              "constraints": {
+                                "size": 64
+                              },
+                              "type": "imageview",
+                              "image": {
+                                "type": "file",
+                                "src": "../icon.png"
+                              }
+                            },
+                            {
+                              "type": "label",
+                              "text": "Delete Chat?",
+                              "font": {
+                                "weight": "bold"
+                              },
+                              "textalign": "centre"
+                            },
+                            {
+                              "constraints": {
+                                "size": {
+                                  "width": 220
+                                }
+                              },
+                              "type": "label",
+                              "text": "It will be sent to the Trash, along with its attachments.",
+                              "linebreak": "wordwrap",
+                              "textalign": "centre"
+                            },
+                            {
+                              "constraints": {
+                                "insets": {
+                                  "top": 6
+                                }
+                              },
+                              "type": "view",
+                              "layout": "inline",
+                              "direction": "horizontal",
+                              "spacing": 10,
+                              "components": [
+                                {
+                                  "constraints": {
+                                    "size": {
+                                      "width": 105
+                                    }
+                                  },
+                                  "type": "button",
+                                  "text": "Cancel",
+                                  "events": [
+                                    {
+                                      "triggers": "actioned",
+                                      "action": {
+                                        "type": "json",
+                                        "src": {
+                                          "sheet": {
+                                            "close": "confirmDelete"
+                                          }
+                                        }
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "constraints": {
+                                    "size": {
+                                      "width": 105
+                                    }
+                                  },
+                                  "type": "button",
+                                  "text": "Delete",
+                                  "shortcut": "↩",
+                                  "events": [
+                                    {
+                                      "triggers": "actioned",
+                                      "action": [
+                                        {
+                                          "type": "script",
+                                          "src": "scripts/delete-chat",
+                                          "args": "{var:remove_chat}"
+                                        },
+                                        {
+                                          "type": "json",
+                                          "src": {
+                                            "sheet": {
+                                              "close": "confirmDelete"
+                                            },
+                                            "update": {
+                                              "ids": {
+                                                "chatList": {
+                                                  "data": {
+                                                    "modify": {
+                                                      "delete": {
+                                                        "uids": [
+                                                          "{var:remove_chat}"
+                                                        ]
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        },
+                                        {
+                                          "type": "script",
+                                          "src": "scripts/load-chat-list",
+                                          "args": "visibility"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
                         }
                       }
-                    },
-                    {
-                      "type": "script",
-                      "src": "scripts/load-chat-list",
-                      "args": "visibility"
                     }
-                  ]
+                  }
                 }
               ]
             }
@@ -201,45 +300,172 @@
           ]
         },
         {
+          "text": "Copy Chat as Markdown",
+          "action": {
+            "type": "script",
+            "src": "scripts/export-chat",
+            "args": [
+              "{data:uid}",
+              "copy"
+            ]
+          }
+        },
+        {
+          "text": "Export as Markdown…",
+          "action": {
+            "type": "script",
+            "async": true,
+            "src": "scripts/export-chat",
+            "args": [
+              "{data:uid}",
+              "file"
+            ]
+          }
+        },
+        {
           "type": "separator"
         },
         {
-          "text": "Delete Chat",
-          "action": [
-            {
-              "type": "script",
-              "src": "scripts/delete-chat",
-              "args": "{data:uid}"
+          "text": "Delete Chat…",
+          "action": {
+            "type": "json",
+            "variables": {
+              "remove_chat": "{data:uid}"
             },
-            {
-              "type": "json",
-              "variables": {
-                "remove_chat": "{data:uid}"
-              },
-              "src": {
-                "update": {
-                  "ids": {
-                    "chatList": {
-                      "data": {
-                        "modify": {
-                          "delete": {
-                            "uids": [
-                              "{var:remove_chat}"
-                            ]
-                          }
-                        }
-                      }
+            "src": {
+              "sheet": {
+                "id": "confirmDelete",
+                "root": {
+                  "constraints": {
+                    "size": {
+                      "width": 260
                     }
-                  }
+                  },
+                  "type": "view",
+                  "layout": "inline",
+                  "direction": "vertical",
+                  "padding": 20,
+                  "spacing": 10,
+                  "components": [
+                    {
+                      "constraints": {
+                        "size": 64
+                      },
+                      "type": "imageview",
+                      "image": {
+                        "type": "file",
+                        "src": "../icon.png"
+                      }
+                    },
+                    {
+                      "type": "label",
+                      "text": "Delete Chat?",
+                      "font": {
+                        "weight": "bold"
+                      },
+                      "textalign": "centre"
+                    },
+                    {
+                      "constraints": {
+                        "size": {
+                          "width": 220
+                        }
+                      },
+                      "type": "label",
+                      "text": "It will be sent to the Trash, along with its attachments.",
+                      "linebreak": "wordwrap",
+                      "textalign": "centre"
+                    },
+                    {
+                      "constraints": {
+                        "insets": {
+                          "top": 6
+                        }
+                      },
+                      "type": "view",
+                      "layout": "inline",
+                      "direction": "horizontal",
+                      "spacing": 10,
+                      "components": [
+                        {
+                          "constraints": {
+                            "size": {
+                              "width": 105
+                            }
+                          },
+                          "type": "button",
+                          "text": "Cancel",
+                          "events": [
+                            {
+                              "triggers": "actioned",
+                              "action": {
+                                "type": "json",
+                                "src": {
+                                  "sheet": {
+                                    "close": "confirmDelete"
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "constraints": {
+                            "size": {
+                              "width": 105
+                            }
+                          },
+                          "type": "button",
+                          "text": "Delete",
+                          "shortcut": "↩",
+                          "events": [
+                            {
+                              "triggers": "actioned",
+                              "action": [
+                                {
+                                  "type": "script",
+                                  "src": "scripts/delete-chat",
+                                  "args": "{var:remove_chat}"
+                                },
+                                {
+                                  "type": "json",
+                                  "src": {
+                                    "sheet": {
+                                      "close": "confirmDelete"
+                                    },
+                                    "update": {
+                                      "ids": {
+                                        "chatList": {
+                                          "data": {
+                                            "modify": {
+                                              "delete": {
+                                                "uids": [
+                                                  "{var:remove_chat}"
+                                                ]
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "type": "script",
+                                  "src": "scripts/load-chat-list",
+                                  "args": "visibility"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               }
-            },
-            {
-              "type": "script",
-              "src": "scripts/load-chat-list",
-              "args": "visibility"
             }
-          ]
+          }
         }
       ]
     }

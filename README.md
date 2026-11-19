@@ -54,7 +54,7 @@ Open the chat window with the `claude` keyword, or set a [Hotkey](https://www.al
 * The paperclip attaches files to your next message. See [Attachments](#attachments).
 * The paste button puts the last reply into the app you came from. See [Ask Claude from anywhere](#ask-claude-from-anywhere).
 * The search box above the chat list filters chats as you type.
-* Each chat in the sidebar has buttons to copy the last message and to delete the chat. Right-click a chat for the same actions.
+* Each chat in the sidebar has buttons to copy the last message and to delete the chat. Right-click a chat for the same actions, and to copy or export the whole chat as Markdown. Exporting asks where to save the file.
 * The model dropdown in the chat window switches model. You can change it between messages in the same chat.
 
 Each chat keeps its own Claude Code session, so follow-up questions see the whole conversation as real turns rather than a pasted transcript.
@@ -118,6 +118,7 @@ Audio, video and other files Claude can't read are refused with a message saying
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd> | Copy the last reply |
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>↩</kbd> | Paste the last reply into the app you came from, and close |
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd> | Attach what is on the clipboard |
+| <kbd>⌘</kbd><kbd>E</kbd> | Export the open chat as Markdown |
 | <kbd>⌘</kbd><kbd>]</kbd> or <kbd>⌥</kbd><kbd>⌘</kbd><kbd>↓</kbd> | Next chat |
 | <kbd>⌘</kbd><kbd>[</kbd> or <kbd>⌥</kbd><kbd>⌘</kbd><kbd>↑</kbd> | Previous chat |
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>⌫</kbd> | Delete all chats. They go to the Trash. |

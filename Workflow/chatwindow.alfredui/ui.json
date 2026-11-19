@@ -708,6 +708,18 @@
             "src": "scripts/paste-reply",
             "args": "{var:current_chat_file}"
           }
+        },
+        {
+          "shortcut": "⌘E",
+          "action": {
+            "type": "script",
+            "src": "scripts/export-chat",
+            "args": [
+              "{var:current_chat_file}",
+              "file"
+            ],
+            "async": true
+          }
         }
       ]
     }

@@ -1,0 +1,101 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Turn a chat into Markdown.
+//
+//   export-chat <chat file> file    Ask where to save it, with the standard save dialog
+//   export-chat <chat file> copy    Put it on the clipboard
+
+ObjC.import("AppKit")
+
+// A question as it was asked: the preset's name rather than its full instruction,
+// and attachments by name, since their paths mean nothing on another Mac
+function questionText(message) {
+  const attachments = message.attachments || []
+  const display = message.display || message.content
+
+  // In the chat, pictures and a 📎 line of names come before the text
+  const marker = display.indexOf("📎 ")
+  const afterNames = marker >= 0 ? display.indexOf("\n\n", marker) : -1
+  const text = attachments.length > 0 && afterNames >= 0 ? display.slice(afterNames + 2) : display
+
+  const attached = attachments.length > 0
+    ? `_Attached: ${attachments.map(attachment => attachment.name).join(", ")}_\n\n`
+    : ""
+
+  return attached + text.trim()
+}
+
+function chatTitle(chat) {
+  const first = chat.find(message => message.role === "user")
+  return (first?.title || first?.content || "Chat").split("\n")[0].trim() || "Chat"
+}
+
+function markdown(chat) {
+  const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })
+
+  const turns = chat.flatMap(message => {
+    if (message.role === "user") return [`## You\n\n${questionText(message)}`]
+    if (message.role === "assistant") return [`## Claude\n\n${message.content.trim()}`]
+    return []
+  })
+
+  return `# ${chatTitle(chat)}\n\n_Exported from Claude Chat on ${date}_\n\n${turns.join("\n\n")}\n`
+}
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+// The standard macOS save dialog, starting in the folder used last time (Downloads at first)
+// with the chat's title as the file name. Returns the chosen path, or nothing if cancelled
+function askWhereToSave(title) {
+  const fileManager = $.NSFileManager.defaultManager
+  const lastFolderFile = `${envVar("alfred_workflow_cache")}/export-folder.txt`
+  const lastFolder = $.NSString.stringWithContentsOfFileEncodingError(lastFolderFile, $.NSUTF8StringEncoding, undefined).js
+  const folder = lastFolder && fileManager.fileExistsAtPath(lastFolder)
+    ? lastFolder
+    : $("~/Downloads").stringByExpandingTildeInPath.js
+
+  const name = title.replace(/[\/:\\]/g, "-").replace(/\s+/g, " ").slice(0, 60).trim() || "Chat"
+
+  const app = Application.currentApplication()
+  app.includeStandardAdditions = true
+  app.activate()
+
+  let chosen
+  try {
+    chosen = app.chooseFileName({ withPrompt: "Export chat as Markdown", defaultName: `${name}.md`, defaultLocation: Path(folder) }).toString()
+  } catch { return undefined } // Cancelled
+
+  $($(chosen).stringByDeletingLastPathComponent.js).writeToFileAtomicallyEncodingError(lastFolderFile, true, $.NSUTF8StringEncoding, undefined)
+  return chosen
+}
+
+function run(argv) {
+  const [chatFile, mode] = argv
+  const failed = JSON.stringify({ sound: { src: "Basso" } })
+  if (!chatFile) return failed
+
+  let chat
+  try {
+    chat = JSON.parse($.NSString.stringWithContentsOfFileEncodingError(chatFile, $.NSUTF8StringEncoding, undefined).js)
+  } catch { return failed }
+
+  const text = markdown(chat)
+
+  if (mode === "copy") {
+    const pasteboard = $.NSPasteboard.generalPasteboard
+    pasteboard.clearContents
+    pasteboard.setStringForType(text, "public.utf8-plain-text")
+    return JSON.stringify({ sound: { src: "Blow" } })
+  }
+
+  const path = askWhereToSave(chatTitle(chat))
+  if (!path) return
+
+  if (!$(text).writeToFileAtomicallyEncodingError(path, true, $.NSUTF8StringEncoding, undefined)) return failed
+  return JSON.stringify({ sound: { src: "Blow" } })
+}
