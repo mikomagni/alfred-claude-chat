@@ -21,8 +21,56 @@ function appendChat(path, message) {
   $(JSON.stringify(ongoingChat)).writeToFileAtomicallyEncodingError(path, true, $.NSUTF8StringEncoding, undefined)
 }
 
+// Alfred's Markdown view crashes on a quote that starts with an empty line (">" on its own),
+// and on a callout title with nothing under it. Both turn up mid-stream, while Claude is
+// part way through writing a quote, so anything shown in the chat goes through here first
+function safeMarkdown(text) {
+  const isQuote = line => /^\s{0,3}>/.test(line ?? "")
+  const isEmptyQuote = line => /^\s{0,3}(>\s*)+$/.test(line ?? "")
+  const isCalloutTitle = line => /^\s{0,3}>\s*\[![^\]]*\]\s*$/.test(line ?? "")
+
+  // An empty quote line is fine inside a quote, and dropped when it would start one
+  const lines = []
+  let inCode = false
+
+  for (const line of text.split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) inCode = !inCode
+
+    if (!inCode && isEmptyQuote(line)) {
+      if (isQuote(lines[lines.length - 1])) lines.push(">")
+      continue
+    }
+
+    lines.push(line)
+  }
+
+  // A callout title is dropped until there is something under it
+  return lines
+    .filter((line, index) => {
+      if (isCalloutTitle(line)) {
+        let next = index + 1
+        while (isEmptyQuote(lines[next])) next++
+        return isQuote(lines[next])
+      }
+
+      // The empty lines that followed a dropped title go too
+      if (isEmptyQuote(line)) {
+        let previous = index - 1
+        while (isEmptyQuote(lines[previous])) previous--
+        if (isCalloutTitle(lines[previous])) {
+          let next = index + 1
+          while (isEmptyQuote(lines[next])) next++
+          return isQuote(lines[next])
+        }
+      }
+
+      return true
+    })
+    .join("\n")
+}
+
 function endStreaming(chatAreaObj) {
-  return runScript("end-streaming", [ JSON.stringify(chatAreaObj) ])
+  return runScript("end-streaming", [ JSON.stringify({ ...chatAreaObj, text: safeMarkdown(chatAreaObj.text) }) ])
 }
 
 function runScript(name, args) {
@@ -113,7 +161,7 @@ function run(argv) {
     // Claude Code has started but hasn't written anything yet
     return JSON.stringify({ update: { ids: { chatArea: {
       behaviour: { mode: "replacelast", scroll: "end" },
-      text: responseText || (readingFiles ? "*Reading the attached files…*" : "*Thinking…*")
+      text: safeMarkdown(responseText).trim() ? safeMarkdown(responseText) : (readingFiles ? "*Reading the attached files…*" : "*Thinking…*")
     }}}})
   }
 
