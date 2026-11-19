@@ -12,10 +12,6 @@ function readFile(path) {
   return $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
 }
 
-function trashFile(path) {
-  $.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError($.NSURL.fileURLWithPath(path), undefined, undefined)
-}
-
 function kill(pid) {
   ObjC.import("signal")
   $.kill(pid, $.SIGTERM)
@@ -31,13 +27,15 @@ function run(argv) {
   const pid = parseInt(readFile(pidStreamFile))
   if (pid > 0) kill(pid)
 
-  trashFile(pidStreamFile)
-  trashFile(streamFile)
+  const fileManager = $.NSFileManager.defaultManager
+  fileManager.removeItemAtPathError(pidStreamFile, undefined)
+  fileManager.removeItemAtPathError(streamFile, undefined)
+  fileManager.removeItemAtPathError(`${envVar("alfred_workflow_cache")}/starting`, undefined)
 
   return JSON.stringify({
-    pulse: { interval: 0 },
-    variables: { stop_streaming: false },
-    update: { ids: {
+    pulse: { interval: 0.5 },
+    variables: { stop_streaming: false, preset: "" },
+    update: { relayout: true, ids: {
       chatArea: chatAreaObj,
       submitPromptButton: {
         image: { type: "symbol", src: "arrow.up.circle.fill" },
@@ -45,6 +43,8 @@ function run(argv) {
       },
       newChatButton: { enabled: true },
       deleteAllButton: { enabled: true },
+      presetsButton: { enabled: true, text: "Presets" },
+      regenerateButton: { enabled: true },
       chatList: { enabled: true },
       promptField: { enabled: true, focus: true, text: "" }
     }}

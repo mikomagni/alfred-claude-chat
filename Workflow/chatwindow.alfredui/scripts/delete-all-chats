@@ -1,0 +1,14 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Send every chat to the Trash, leaving the presets alone
+
+function run() {
+  const fileManager = $.NSFileManager.defaultManager
+  const dataDir = $.NSProcessInfo.processInfo.environment.objectForKey("alfred_workflow_data").js
+  const files = ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(dataDir, undefined)) || []
+
+  files
+    .filter(file => file.endsWith(".json"))
+    .forEach(file => fileManager.trashItemAtURLResultingItemURLError(
+      $.NSURL.fileURLWithPath(`${dataDir}/${file}`), undefined, undefined))
+}

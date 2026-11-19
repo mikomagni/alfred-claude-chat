@@ -32,6 +32,7 @@
   },
   "variables": {
     "current_chat_file": null,
+    "preset": "",
     "new_chat": [
       {
         "type": "json",
@@ -65,7 +66,8 @@
         "src": "scripts/prepare-for-streaming",
         "args": [
           "{var:current_chat_file}",
-          "{value:promptField.text}"
+          "{value:promptField.text}",
+          "{var:preset}"
         ]
       },
       {
@@ -74,30 +76,16 @@
         "src": "scripts/submit-prompt",
         "args": [
           "{var:current_chat_file}",
-          "{value:promptField.text}"
+          "{value:promptField.text}",
+          "{var:preset}"
         ]
-      },
-      {
-        "type": "json",
-        "src": {
-          "update": {
-            "ids": {
-              "chatArea": {
-                "behaviour": {
-                  "mode": "append"
-                },
-                "text": "*Starting Claude…*"
-              }
-            }
-          }
-        }
       }
     ]
   },
   "pulse": {
-    "interval": 0,
+    "interval": 0.5,
     "intervalmode": "delay",
-    "src": "scripts/loop-chat",
+    "src": "scripts/pulse",
     "args": "{var:current_chat_file}"
   },
   "window": {
@@ -192,8 +180,7 @@
                       "action": [
                         {
                           "type": "script",
-                          "src": "/usr/bin/trash",
-                          "args": "{const:alfred_workflow_data}"
+                          "src": "scripts/delete-all-chats"
                         },
                         {
                           "type": "script",
@@ -344,6 +331,35 @@
                   "layout": "border",
                   "components": [
                     {
+                      "constraints": {
+                        "region": "centre",
+                        "position": "left"
+                      },
+                      "id": "presetsButton",
+                      "type": "button",
+                      "bordered": false,
+                      "font": {
+                        "size": 13
+                      },
+                      "contenttintcolour": "labelColor",
+                      "text": "Presets",
+                      "shortcut": "⌘P",
+                      "tooltip": "Choose a preset for your next message ⌘P",
+                      "events": [
+                        {
+                          "triggers": "actioned",
+                          "action": {
+                            "type": "script",
+                            "src": "scripts/presets",
+                            "args": [
+                              "menu",
+                              "{var:preset}"
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
                       "id": "modelPicker",
                       "constraints": {
                         "region": "left"
@@ -426,20 +442,53 @@
                       "constraints": {
                         "region": "right"
                       },
-                      "id": "submitPromptButton",
-                      "type": "button",
-                      "bordered": false,
-                      "font": {
-                        "size": 16
-                      },
-                      "image": {
-                        "type": "symbol",
-                        "src": "arrow.up.circle.fill"
-                      },
-                      "events": [
+                      "type": "view",
+                      "layout": "inline",
+                      "direction": "horizontal",
+                      "spacing": 10,
+                      "components": [
                         {
-                          "triggers": "actioned",
-                          "action": "{var:submit_prompt}"
+                          "id": "regenerateButton",
+                          "type": "button",
+                          "bordered": false,
+                          "font": {
+                            "size": 14
+                          },
+                          "image": {
+                            "type": "symbol",
+                            "src": "arrow.clockwise"
+                          },
+                          "contenttintcolour": "secondaryLabelColor",
+                          "shortcut": "⌘R",
+                          "tooltip": "Regenerate the last reply ⌘R",
+                          "events": [
+                            {
+                              "triggers": "actioned",
+                              "action": {
+                                "type": "script",
+                                "src": "scripts/regenerate",
+                                "args": "{var:current_chat_file}"
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "id": "submitPromptButton",
+                          "type": "button",
+                          "bordered": false,
+                          "font": {
+                            "size": 16
+                          },
+                          "image": {
+                            "type": "symbol",
+                            "src": "arrow.up.circle.fill"
+                          },
+                          "events": [
+                            {
+                              "triggers": "actioned",
+                              "action": "{var:submit_prompt}"
+                            }
+                          ]
                         }
                       ]
                     }
@@ -481,6 +530,28 @@
             "src": "scripts/select-chat",
             "args": "previous"
           }
+        },
+        {
+          "shortcut": "⌘⇧C",
+          "action": [
+            {
+              "type": "script",
+              "src": "scripts/copy-response",
+              "args": "{var:current_chat_file}"
+            },
+            {
+              "type": "json",
+              "src": {
+                "copy": {
+                  "type": "text",
+                  "src": "{var:last_response}"
+                },
+                "sound": {
+                  "src": "Blow"
+                }
+              }
+            }
+          ]
         },
         {
           "shortcut": "⌘]",

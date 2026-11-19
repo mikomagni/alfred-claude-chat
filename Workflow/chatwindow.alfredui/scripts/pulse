@@ -1,0 +1,12 @@
+#!/bin/zsh
+
+# Runs twice a second while the window is open, and faster while a reply is streaming.
+# Kept in zsh so the idle checks cost almost nothing.
+
+readonly cache="${alfred_workflow_cache}"
+
+if [[ -f "${cache}/stream.txt" ]]; then
+  exec scripts/loop-chat "${1}"   # A reply is on its way
+elif [[ -f "${cache}/inbox.json" ]]; then
+  exec scripts/receive            # Text was sent to the window from elsewhere
+fi

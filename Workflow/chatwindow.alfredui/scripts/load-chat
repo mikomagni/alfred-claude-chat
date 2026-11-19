@@ -6,7 +6,7 @@ function markdownChat(messages) {
       return `${accumulator}\n\n${current["content"]}`
 
     if (current["role"] === "user") {
-      const userMessage = `> [!alfredSelectedResultBackgroundColor:questionmark.circle:Question]\n${current["content"].split("\n").map(line => `> ${line}  `).join("\n")}`
+      const userMessage = `> [!alfredSelectedResultBackgroundColor:questionmark.circle:Question]\n${(current["display"] || current["content"]).split("\n").map(line => `> ${line}  `).join("\n")}`
       const userTwice = allMessages[index + 1]?.["role"] === "user" // "user" role twice in a row
       const lastMessage = index === allMessages.length - 1 // "user" is last message
 
@@ -22,6 +22,10 @@ function markdownChat(messages) {
 
 function run(argv) {
   const chatPath = argv[0]
+
+  // While a reply is streaming, the chat area belongs to that chat
+  const cacheDir = $.NSProcessInfo.processInfo.environment.objectForKey("alfred_workflow_cache").js
+  if ($.NSFileManager.defaultManager.fileExistsAtPath(`${cacheDir}/stream.txt`)) return
 
   // Clear the chat area and variable when no chat is selected
   if (chatPath.length === 0) return JSON.stringify({

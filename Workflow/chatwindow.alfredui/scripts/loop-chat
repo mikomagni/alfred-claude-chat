@@ -44,6 +44,17 @@ function run(argv) {
   const stopStreaming = envVar("stop_streaming") === "1"
   const timeoutSeconds = parseInt(envVar("timeout_seconds")) || 30
   const streamFile = `${envVar("alfred_workflow_cache")}/stream.txt`
+
+  // First pulse after sending: add the status line under the question. Every later pulse replaces
+  // that line, so it has to be there first, even if the reply or an error has already arrived
+  const startingFile = `${envVar("alfred_workflow_cache")}/starting`
+  if ($.NSFileManager.defaultManager.fileExistsAtPath(startingFile)) {
+    $.NSFileManager.defaultManager.removeItemAtPathError(startingFile, undefined)
+    return JSON.stringify({ update: { ids: { chatArea: {
+      behaviour: { mode: "append", scroll: "end" },
+      text: "*Starting Claude…*"
+    }}}})
+  }
   const streamString = $.NSString.stringWithContentsOfFileEncodingError(streamFile, $.NSUTF8StringEncoding, undefined).js || ""
 
   // One JSON event per line; the last line may still be half-written

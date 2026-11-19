@@ -22,14 +22,16 @@ function readFile(path) {
   return $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
 }
 
-// With "visibility" as the argument, only show or hide the list, leaving its contents and selection alone
+// With "visibility" as the argument, only show or hide the list, leaving its contents and selection alone.
+// With "launch", also clear up after a window closed mid-reply
 function run(argv) {
   const chatData = dirContents(envVar("alfred_workflow_data"))
     ?.flatMap(url => {
       if (url.pathExtension.js !== "json") return []
 
       const file = url.path.js
-      const firstMessage = JSON.parse(readFile(file)).find(entry => entry.role === "user").content
+      const first = JSON.parse(readFile(file)).find(entry => entry.role === "user")
+      const firstMessage = first.title || first.content
 
       return {
         "uid": file,
@@ -42,5 +44,14 @@ function run(argv) {
   const chatList = { hidden: empty }
   if (argv[0] !== "visibility") chatList.data = { src: chatData }
 
-  return JSON.stringify({ update: { ids: { chatList, chatListEmpty: { hidden: !empty } }}})
+  const response = { update: { ids: { chatList, chatListEmpty: { hidden: !empty } }}}
+
+  if (argv[0] === "launch") {
+    const fileManager = $.NSFileManager.defaultManager
+    const cacheDir = envVar("alfred_workflow_cache")
+    ;["stream.txt", "pid.txt", "starting"].forEach(file => fileManager.removeItemAtPathError(`${cacheDir}/${file}`, undefined))
+
+  }
+
+  return JSON.stringify(response)
 }

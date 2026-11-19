@@ -60,6 +60,22 @@ function currentModel(cacheDir) {
   return model === "default" ? "" : model
 }
 
+// With a preset, the instruction goes in front of the text. The chat shows the preset's name
+// above the text instead, and the chat list shows "Preset: text"
+function composeMessage(prompt, presetArg) {
+  let preset
+  try { preset = JSON.parse(presetArg) } catch {}
+  if (typeof preset === "string") try { preset = JSON.parse(preset) } catch {}
+  if (!preset?.prompt) return { content: prompt }
+
+  const text = prompt.trim()
+  return {
+    content: `${preset.prompt}\n\n"""\n${text}\n"""`,
+    title: `${preset.name}: ${text}`,
+    display: `**${preset.name}**\n\n${text}`
+  }
+}
+
 function isExecutable(path) {
   const isDirectory = Ref()
   const fileManager = $.NSFileManager.defaultManager
@@ -126,7 +142,7 @@ function findClaude() {
 function startStream({ claudePath, claudeError, modelId, sessionId, prompt, streamFile, pidStreamFile, workDir }) {
   const fileManager = $.NSFileManager.defaultManager
   fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(workDir, true, undefined, undefined)
-  fileManager.createFileAtPathContentsAttributes(streamFile, undefined, undefined)
+  if (!fileManager.fileExistsAtPath(streamFile)) fileManager.createFileAtPathContentsAttributes(streamFile, undefined, undefined)
 
   if (!claudePath) {
     writeFile(streamFile, JSON.stringify({ type: "result", is_error: true, result: claudeError }))
@@ -206,11 +222,15 @@ function run(argv) {
     : "Couldn't find Claude Code in the usual install locations. Run `which claude` in Terminal and paste the result into Claude Path in the workflow configuration."
 
   const previousChat = readChat(chatFile)
-  const ongoingChat = previousChat.concat({ role: "user", content: prompt })
-  const sessionId = resumableSession(previousChat)
+  // Regenerating passes the original message to send again as it was,
+  // and the session that held the old reply, which mustn't be continued
+  const message = argv[3] ? JSON.parse(argv[3]) : composeMessage(prompt, argv[2])
+  const ongoingChat = previousChat.concat({ role: "user", ...message })
+  const resumable = resumableSession(previousChat)
+  const sessionId = resumable && resumable !== argv[4] ? resumable : undefined
 
   const claudePrompt = sessionId
-    ? prompt
+    ? message.content
     : transcriptPrompt(ongoingChat.filter(m => m.role === "user" || m.role === "assistant").slice(-maxContext))
 
   writeFile(chatFile, JSON.stringify(ongoingChat))

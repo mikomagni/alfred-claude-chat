@@ -7,18 +7,43 @@ function envVar(varName) {
     .objectForKey(varName).js
 }
 
+// With a preset, the instruction goes in front of the text. The chat shows the preset's name
+// above the text instead, and the chat list shows "Preset: text"
+function composeMessage(prompt, presetArg) {
+  let preset
+  try { preset = JSON.parse(presetArg) } catch {}
+  if (typeof preset === "string") try { preset = JSON.parse(preset) } catch {}
+  if (!preset?.prompt) return { content: prompt }
+
+  const text = prompt.trim()
+  return {
+    content: `${preset.prompt}\n\n"""\n${text}\n"""`,
+    title: `${preset.name}: ${text}`,
+    display: `**${preset.name}**\n\n${text}`
+  }
+}
+
 function run(argv) {
   const chatFile = argv[0]
   const prompt = argv[1]
+  const message = composeMessage(prompt, argv[2])
 
   if (prompt.trim().length === 0) return JSON.stringify({ sound: { src: "Basso" }})
+
+  // An empty stream file marks a reply as on its way, before Claude Code has even started.
+  // "starting" tells the first pulse to show the Starting Claude… line
+  const cacheDir = envVar("alfred_workflow_cache")
+  const fileManager = $.NSFileManager.defaultManager
+  fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(cacheDir, true, undefined, undefined)
+  fileManager.createFileAtPathContentsAttributes(`${cacheDir}/stream.txt`, undefined, undefined)
+  fileManager.createFileAtPathContentsAttributes(`${cacheDir}/starting`, undefined, undefined)
 
   const response = {
     pulse: { interval: 0.1 },
     update: { ids: {
       chatArea: {
         behaviour: { mode: "append" },
-        text: `\n\n> [!alfredSelectedResultBackgroundColor:questionmark.circle:Question]\n${prompt.split("\n").map(line => `> ${line}  `).join("\n")}\n\n`
+        text: `\n\n> [!alfredSelectedResultBackgroundColor:questionmark.circle:Question]\n${(message.display || message.content).split("\n").map(line => `> ${line}  `).join("\n")}\n\n`
       },
       submitPromptButton: {
         image: { type: "symbol", src: "stop.circle.fill" },
@@ -29,6 +54,8 @@ function run(argv) {
       },
       newChatButton: { enabled: false },
       deleteAllButton: { enabled: false },
+      presetsButton: { enabled: false },
+      regenerateButton: { enabled: false },
       chatList: { enabled: false },
       promptField: { enabled: false }
     }}
@@ -58,7 +85,7 @@ function run(argv) {
       position: "before",
       src: [{
         "uid": newChatFile,
-        "chatName.text": prompt
+        "chatName.text": message.title || prompt
       }]
     }}}
   }

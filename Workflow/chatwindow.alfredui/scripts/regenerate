@@ -1,0 +1,86 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Ask the last question of the open chat again, replacing the reply it got.
+// Also works as a retry when the last question was interrupted or ended in an error.
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function readFile(path) {
+  return $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
+}
+
+function writeFile(path, text) {
+  $(text).writeToFileAtomicallyEncodingError(path, true, $.NSUTF8StringEncoding, undefined)
+}
+
+function runScript(name, args, wait) {
+  const task = $.NSTask.alloc.init
+  const stdout = $.NSPipe.pipe
+
+  task.executableURL = $.NSURL.fileURLWithPath(
+    $.NSFileManager.defaultManager.currentDirectoryPath.stringByAppendingPathComponent(`scripts/${name}`).js)
+  task.arguments = args
+  task.standardInput = $.NSFileHandle.fileHandleWithNullDevice
+  task.standardOutput = wait ? stdout : $.NSFileHandle.fileHandleWithNullDevice
+  task.standardError = $.NSFileHandle.fileHandleWithNullDevice
+  task.launchAndReturnError(false)
+  if (!wait) return
+
+  const data = stdout.fileHandleForReading.readDataToEndOfFileAndReturnError(false)
+  return $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js
+}
+
+function run(argv) {
+  const chatFile = argv[0]
+  const cacheDir = envVar("alfred_workflow_cache")
+  const fileManager = $.NSFileManager.defaultManager
+  const nothingToDo = JSON.stringify({ sound: { src: "Basso" } })
+
+  if (!chatFile || fileManager.fileExistsAtPath(`${cacheDir}/stream.txt`)) return nothingToDo
+
+  let chat
+  try { chat = JSON.parse(readFile(chatFile)) } catch { return nothingToDo }
+
+  const questionIndex = chat.findLastIndex(message => message.role === "user")
+  if (questionIndex < 0) return nothingToDo
+
+  const question = chat[questionIndex]
+  const history = chat.slice(0, questionIndex)
+  const replacedSession = chat.slice(questionIndex).findLast(message => message.session_id)?.session_id || ""
+
+  // Draw the chat as it was before the reply, using the same rendering as opening a chat
+  const previewFile = `${cacheDir}/regenerate.json`
+  writeFile(previewFile, JSON.stringify(history.concat(question, { role: "assistant", content: "" })))
+  const chatText = JSON.parse(runScript("load-chat", [previewFile], true)).update.ids.chatArea.text
+  fileManager.removeItemAtPathError(previewFile, undefined)
+
+  // Same markers as sending a message: a reply is on its way, and the first pulse shows Starting Claude…
+  fileManager.createFileAtPathContentsAttributes(`${cacheDir}/stream.txt`, undefined, undefined)
+  fileManager.createFileAtPathContentsAttributes(`${cacheDir}/starting`, undefined, undefined)
+
+  // submit-prompt adds the question back, so the chat is cut to just before it
+  writeFile(chatFile, JSON.stringify(history))
+  runScript("submit-prompt", [chatFile, question.content, "", JSON.stringify(question), replacedSession], false)
+
+  return JSON.stringify({
+    pulse: { interval: 0.1 },
+    update: { ids: {
+      chatArea: { behaviour: { mode: "replace", scroll: "end" }, text: chatText.trimEnd() + "\n\n" },
+      submitPromptButton: {
+        image: { type: "symbol", src: "stop.circle.fill" },
+        events: [{ triggers: "actioned", action: { variables: { stop_streaming: true } } }]
+      },
+      newChatButton: { enabled: false },
+      deleteAllButton: { enabled: false },
+      presetsButton: { enabled: false },
+      regenerateButton: { enabled: false },
+      chatList: { enabled: false },
+      promptField: { enabled: false }
+    }}
+  })
+}

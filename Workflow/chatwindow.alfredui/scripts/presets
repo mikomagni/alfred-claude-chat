@@ -1,0 +1,346 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Everything to do with presets: saved instructions applied to a piece of text.
+// They live in presets/presets.json in the workflow's data folder.
+//
+//   menu <current preset>      The presets menu in the chat window
+//   filter                     The list shown in Alfred after "Ask Claude" (Script Filter JSON)
+//   inbox                      Leave the text and chosen preset for the chat window to pick up
+//   edit                       Open the editor sheet
+//   load <id>                  Show a preset in the editor
+//   save <id> <name> <prompt> [refresh]
+//   add | delete <id> | move <id> up|down
+
+const DEFAULTS = [
+  ["Fix spelling and grammar", "Fix the spelling and grammar of the text below. Keep the wording, tone and formatting. Reply with only the corrected text."],
+  ["Summarise", "Summarise the text below in a few short bullet points."],
+  ["Explain simply", "Explain the text below in plain language, as if to someone new to the subject."],
+  ["Rewrite more clearly", "Rewrite the text below so it is clearer and more concise, keeping the meaning. Reply with only the rewritten text."],
+  ["Make it professional", "Rewrite the text below in a polite, professional tone. Reply with only the rewritten text."],
+  ["Make it friendlier", "Rewrite the text below in a warm, friendly tone. Reply with only the rewritten text."],
+  ["Translate to English", "Translate the text below into English. Reply with only the translation."],
+  ["Draft a reply", "Draft a short, friendly reply to the message below."]
+].map(([name, prompt], index) => ({ id: `default-${index + 1}`, name, prompt }))
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function presetsFile() {
+  return `${envVar("alfred_workflow_data")}/presets/presets.json`
+}
+
+function readPresets() {
+  const saved = $.NSString.stringWithContentsOfFileEncodingError(presetsFile(), $.NSUTF8StringEncoding, undefined).js
+  try {
+    const presets = JSON.parse(saved)
+    if (Array.isArray(presets)) return presets
+  } catch {}
+  return DEFAULTS
+}
+
+function writePresets(presets) {
+  const path = presetsFile()
+  $.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(
+    $(path).stringByDeletingLastPathComponent.js, true, undefined, undefined)
+  $(JSON.stringify(presets, null, 2)).writeToFileAtomicallyEncodingError(path, true, $.NSUTF8StringEncoding, undefined)
+}
+
+// Presets without an instruction are kept in the editor but can't be used
+function usable(presets) {
+  return presets.filter(preset => preset.name.trim() && preset.prompt.trim())
+}
+
+// Chat window menu
+
+// Choosing a preset selects it for the next message: the button shows its name until that message is sent
+function selectAction(preset) {
+  return {
+    type: "json",
+    variables: { preset: preset ? { name: preset.name, prompt: preset.prompt } : "" },
+    // relayout: the button has to resize to fit the new name
+    src: { update: { relayout: true, ids: {
+      presetsButton: { text: preset ? preset.name : "Presets" },
+      promptField: { focus: true }
+    }}}
+  }
+}
+
+function menu(currentArg) {
+  let current
+  try { current = JSON.parse(currentArg) } catch {}
+  if (typeof current === "string") try { current = JSON.parse(current) } catch {}
+
+  const items = usable(readPresets()).map(preset => ({
+    text: preset.name,
+    state: preset.name === current?.name ? "on" : "off",
+    action: selectAction(preset)
+  }))
+
+  const noneItem = { text: "No Preset", state: current?.name ? "off" : "on", action: selectAction() }
+  const editItem = { text: "Edit Presets…", action: { type: "script", src: "scripts/presets", args: "edit" } }
+  const menu = items.length > 0 ? [noneItem, { type: "separator" }].concat(items, { type: "separator" }, editItem) : [editItem]
+
+  return { popupmenu: { src: "presetsButton", menu } }
+}
+
+// List in Alfred
+
+function filter() {
+  const text = envVar("selected_text") || ""
+  const preview = text.trim().replace(/\s+/g, " ").slice(0, 80)
+
+  const askItem = {
+    title: "Ask Claude",
+    subtitle: `Open a new chat with: ${preview}`,
+    arg: "Ask Claude",
+    variables: { preset: "" }
+  }
+
+  const presetItems = usable(readPresets()).map(preset => ({
+    title: preset.name,
+    subtitle: preset.prompt,
+    arg: preset.name,
+    variables: { preset: JSON.stringify({ name: preset.name, prompt: preset.prompt }) }
+  }))
+
+  return { items: [askItem].concat(presetItems) }
+}
+
+// The chat window checks for this file when it opens and while it is open
+function inbox() {
+  const text = envVar("selected_text") || ""
+  if (!text.trim()) return
+
+  let preset = null
+  try { preset = JSON.parse(envVar("preset")) } catch {}
+
+  const cacheDir = envVar("alfred_workflow_cache")
+  $.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(cacheDir, true, undefined, undefined)
+  $(JSON.stringify({ text, preset })).writeToFileAtomicallyEncodingError(`${cacheDir}/inbox.json`, true, $.NSUTF8StringEncoding, undefined)
+}
+
+// Editor
+
+function listData(presets, selectId) {
+  const data = { src: presets.map(preset => ({ uid: preset.id, "presetCellName.text": preset.name || "Untitled" })) }
+  if (selectId !== undefined) data.select = selectId
+  return data
+}
+
+function fieldUpdates(preset) {
+  return {
+    presetName: { text: preset?.name || "", enabled: Boolean(preset) },
+    presetPrompt: { text: preset?.prompt || "", editable: Boolean(preset) }
+  }
+}
+
+// Refresh the list and show one preset in the fields
+function editorUpdate(presets, selectId) {
+  const selected = presets.find(preset => preset.id === selectId)
+  return { update: { ids: {
+    presetList: { data: listData(presets, selected?.id || "") },
+    ...fieldUpdates(selected)
+  }}}
+}
+
+function scriptAction(args) {
+  return { type: "script", src: "scripts/presets", args }
+}
+
+const SELECTED = "{value:presetList.selected.uid}"
+const SAVE_ARGS = ["save", SELECTED, "{value:presetName.text}", "{value:presetPrompt.text}"]
+
+function iconButton(symbol, tooltip, args) {
+  return {
+    type: "button",
+    image: { type: "symbol", src: symbol },
+    bordered: false,
+    font: { size: 14 },
+    tooltip,
+    events: [{ triggers: "actioned", action: scriptAction(args) }]
+  }
+}
+
+function editorSheet() {
+  const presets = readPresets()
+  const first = presets[0]
+
+  return { sheet: {
+    id: "presetsSheet",
+    root: {
+      constraints: { size: { width: 680, height: 440 } },
+      type: "view",
+      layout: "border",
+      padding: 16,
+      spacing: 12,
+      components: [
+        {
+          constraints: { region: "top" },
+          type: "label",
+          text: "Presets are instructions applied to the text you send. Changes save as you type.",
+          colour: "secondaryLabelColor"
+        },
+        {
+          constraints: { region: "left", size: { width: 220 } },
+          type: "view",
+          layout: "border",
+          spacing: 8,
+          components: [
+            {
+              constraints: { region: "centre" },
+              id: "presetList",
+              type: "dataview",
+              placeholder: "No presets",
+              autoadjustcontentinsets: false,
+              events: [{ triggers: "changed", action: scriptAction(["load", "{value:self.selected.uid}"]) }],
+              cell: {
+                height: 28,
+                init: { "presetCell.background": null, "presetCellName.colour": "labelColor" },
+                selected: {
+                  "presetCell.background": "alfredSelectedResultBackgroundColor",
+                  "presetCellName.colour": "alfredSelectedResultTextColor"
+                },
+                root: {
+                  id: "presetCell",
+                  type: "view",
+                  layout: "stack",
+                  cornerradius: 4,
+                  components: [{
+                    constraints: { position: "centre", stretch: "horizontal", insets: { left: 8, right: 8 } },
+                    id: "presetCellName",
+                    type: "label"
+                  }]
+                }
+              },
+              data: listData(presets, first?.id)
+            },
+            {
+              constraints: { region: "bottom", position: "left" },
+              type: "view",
+              layout: "inline",
+              spacing: 12,
+              components: [
+                iconButton("plus", "New Preset", "add"),
+                iconButton("minus", "Delete Preset", ["delete", SELECTED]),
+                iconButton("arrow.up", "Move Up", ["move", SELECTED, "up"]),
+                iconButton("arrow.down", "Move Down", ["move", SELECTED, "down"])
+              ]
+            }
+          ]
+        },
+        {
+          constraints: { region: "centre" },
+          type: "view",
+          layout: "border",
+          spacing: 8,
+          components: [
+            {
+              constraints: { region: "top" },
+              id: "presetName",
+              type: "textfield",
+              placeholder: "Name",
+              text: first?.name || "",
+              enabled: Boolean(first),
+              font: { size: 14 },
+              events: [
+                { triggers: "typingstopped", action: scriptAction(SAVE_ARGS) },
+                { triggers: "actioned", action: scriptAction(SAVE_ARGS.concat("refresh")) }
+              ]
+            },
+            {
+              constraints: { region: "centre" },
+              id: "presetPrompt",
+              type: "textarea",
+              text: first?.prompt || "",
+              editable: Boolean(first),
+              font: { size: 14 },
+              bordertype: "bezel",
+              textinsets: { horizontal: 6, vertical: 6 },
+              autoadjustcontentinsets: false,
+              events: [{ triggers: "typingstopped", action: scriptAction(SAVE_ARGS) }]
+            }
+          ]
+        },
+        {
+          constraints: { region: "bottom", position: "right" },
+          type: "button",
+          text: "Done",
+          shortcut: "⌘↩",
+          events: [{
+            triggers: "actioned",
+            action: [
+              scriptAction(SAVE_ARGS),
+              { type: "json", src: { sheet: { close: "presetsSheet" } } }
+            ]
+          }]
+        }
+      ]
+    }
+  }}
+}
+
+function save(id, name, prompt, refresh) {
+  const presets = readPresets()
+  const preset = presets.find(preset => preset.id === id)
+  if (!preset) return
+
+  preset.name = (name || "").trim()
+  preset.prompt = (prompt || "").trim()
+  writePresets(presets)
+
+  // Only redraw the list when asked: redrawing while you type would move the cursor
+  if (refresh) return { update: { ids: { presetList: { data: listData(presets, id) } } } }
+}
+
+function add() {
+  const presets = readPresets()
+  const preset = { id: $.NSUUID.UUID.UUIDString.js, name: "New preset", prompt: "" }
+  writePresets(presets.concat(preset))
+
+  const response = editorUpdate(presets.concat(preset), preset.id)
+  response.update.ids.presetName.focus = true
+  return response
+}
+
+function remove(id) {
+  const presets = readPresets()
+  const index = presets.findIndex(preset => preset.id === id)
+  if (index < 0) return
+
+  const remaining = presets.filter(preset => preset.id !== id)
+  writePresets(remaining)
+  return editorUpdate(remaining, remaining[Math.min(index, remaining.length - 1)]?.id)
+}
+
+function move(id, direction) {
+  const presets = readPresets()
+  const from = presets.findIndex(preset => preset.id === id)
+  const to = direction === "up" ? from - 1 : from + 1
+  if (from < 0 || to < 0 || to >= presets.length) return
+
+  presets.splice(to, 0, presets.splice(from, 1)[0])
+  writePresets(presets)
+  return { update: { ids: { presetList: { data: listData(presets, id) } } } }
+}
+
+function run(argv) {
+  const [mode, ...args] = argv
+
+  const response = {
+    menu: () => menu(args[0]),
+    filter: () => filter(),
+    inbox: () => inbox(),
+    edit: () => editorSheet(),
+    load: () => ({ update: { ids: fieldUpdates(readPresets().find(preset => preset.id === args[0])) } }),
+    save: () => save(...args),
+    add: () => add(),
+    delete: () => remove(args[0]),
+    move: () => move(...args)
+  }[mode]?.()
+
+  if (response) return JSON.stringify(response)
+}

@@ -44,24 +44,48 @@ To pay per use instead, paste a key into `API Key`. Claude Code still needs to b
 
 ## Usage
 
-Open the chat window with the `claude` keyword, or set a [Hotkey](https://www.alfredapp.com/help/workflows/triggers/hotkey/) for faster triggering.
+Open the chat window with the `claude` keyword, or set a [Hotkey](https://www.alfredapp.com/help/workflows/triggers/hotkey/) for faster triggering. Type text after the keyword to start a new chat with it.
 
 ![The Claude Chat window, with the chat list on the left and a conversation on the right](Workflow/images/about/chatui.png)
 
 * <kbd>↩</kbd> sends your message. While Claude is answering, the send button becomes a stop button.
+* The regenerate button next to it asks the last question again and replaces the reply. Change the model first to get a second opinion.
 * The search box above the chat list filters chats as you type.
 * Each chat in the sidebar has buttons to copy the last message and to delete the chat. Right-click a chat for the same actions.
 * The model dropdown in the chat window switches model. You can change it between messages in the same chat.
+
+Each chat keeps its own Claude Code session, so follow-up questions see the whole conversation as real turns rather than a pasted transcript.
+
+### Ask Claude from anywhere
+
+Select text in any app and run the `Ask Claude` [Universal Action](https://www.alfredapp.com/help/features/universal-actions/), or set the workflow's second Hotkey to send the current selection.
+
+![Alfred showing Ask Claude followed by the list of presets](Workflow/images/about/presetlist.png)
+
+Pick a preset and the chat window opens with the answer on its way. Pick `Ask Claude` to open a new chat with the text in the message box, ready for your own question. This works whether the chat window is already open or not.
+
+### Presets
+
+A preset is a saved instruction, such as Fix spelling and grammar or Summarise, that is applied to the text you send. The workflow comes with eight.
+
+In the chat window, choose one from the Presets menu. The button shows its name, and your next message is sent with it. After the reply, the button goes back to Presets, so follow-up messages are plain ones.
+
+To add, change, reorder or delete presets, choose Edit Presets… from the same menu.
+
+![The presets editor, with the list of presets on the left and the selected preset's name and instruction on the right](Workflow/images/about/presetseditor.png)
+
+### Shortcuts
 
 | Shortcut | Action |
 | -------- | ------ |
 | <kbd>⌘</kbd><kbd>N</kbd> | New chat |
 | <kbd>⌘</kbd><kbd>F</kbd> | Search chats |
+| <kbd>⌘</kbd><kbd>P</kbd> | Presets menu |
+| <kbd>⌘</kbd><kbd>R</kbd> | Regenerate the last reply |
+| <kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd> | Copy the last reply |
 | <kbd>⌘</kbd><kbd>]</kbd> or <kbd>⌥</kbd><kbd>⌘</kbd><kbd>↓</kbd> | Next chat |
 | <kbd>⌘</kbd><kbd>[</kbd> or <kbd>⌥</kbd><kbd>⌘</kbd><kbd>↑</kbd> | Previous chat |
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>⌫</kbd> | Delete all chats. They go to the Trash. |
-
-Each chat keeps its own Claude Code session, so follow-up questions see the whole conversation as real turns rather than a pasted transcript.
 
 ## Good to know
 
@@ -69,6 +93,8 @@ Each chat keeps its own Claude Code session, so follow-up questions see the whol
 * Replies take a second or two longer to start than a direct API call because Claude Code launches for each message. The window shows "Starting Claude…" and then "Thinking…" while you wait.
 * The first time Alfred launches Claude Code, macOS may ask whether it can read the Claude login from your Keychain. Choose Always Allow.
 * Claude Code saves each chat as a session under `~/.claude/projects`. Deleting a chat in the workflow does not delete that session.
+* Regenerating a reply starts a new Claude Code session for that chat when the old one can't be rewound. Earlier messages are sent along as context.
+* Presets are saved in the workflow's data folder, so they survive workflow updates. Delete All Chats leaves them alone.
 
 ## Building from source
 

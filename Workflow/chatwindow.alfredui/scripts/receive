@@ -1,0 +1,74 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Picks up text sent to the chat window from elsewhere (Universal Action, Hotkey or keyword).
+// The workflow leaves it in inbox.json, so it arrives whether the window was already open or not.
+// With a preset, a new chat is started and sent straight away. Without one, the text waits in the message box.
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function scriptPath(name) {
+  return $.NSFileManager.defaultManager.currentDirectoryPath.stringByAppendingPathComponent(`scripts/${name}`).js
+}
+
+function runScript(name, args, wait) {
+  const task = $.NSTask.alloc.init
+  const stdout = $.NSPipe.pipe
+
+  task.executableURL = $.NSURL.fileURLWithPath(scriptPath(name))
+  task.arguments = args
+  task.standardInput = $.NSFileHandle.fileHandleWithNullDevice
+  task.standardOutput = wait ? stdout : $.NSFileHandle.fileHandleWithNullDevice
+  task.standardError = $.NSFileHandle.fileHandleWithNullDevice
+  task.launchAndReturnError(false)
+  if (!wait) return
+
+  const data = stdout.fileHandleForReading.readDataToEndOfFileAndReturnError(false)
+  return $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js
+}
+
+// Bring the chat window forward if it was already open behind other apps
+function activateWindow() {
+  ObjC.import("AppKit")
+  ObjC.import("unistd")
+  $.NSRunningApplication.runningApplicationWithProcessIdentifier($.getppid())
+    ?.activateWithOptions($.NSApplicationActivateIgnoringOtherApps)
+}
+
+function run() {
+  const inboxFile = `${envVar("alfred_workflow_cache")}/inbox.json`
+  const inboxString = $.NSString.stringWithContentsOfFileEncodingError(inboxFile, $.NSUTF8StringEncoding, undefined).js
+  $.NSFileManager.defaultManager.removeItemAtPathError(inboxFile, undefined)
+
+  let inbox
+  try { inbox = JSON.parse(inboxString) } catch { return }
+
+  const text = (inbox.text || "").trim()
+  if (!text) return
+
+  activateWindow()
+
+  // No preset: start a new chat with the text ready to edit
+  if (!inbox.preset?.prompt) return JSON.stringify({
+    variables: { current_chat_file: null },
+    update: { ids: {
+      chatArea: { behaviour: { mode: "replace" }, text: "" },
+      promptField: { text: text, focus: true }
+    }},
+    functions: { ids: { chatList: "selectnone" } }
+  })
+
+  // Preset: the same steps as pressing ↩ in a new chat
+  const preset = JSON.stringify(inbox.preset)
+  const response = JSON.parse(runScript("prepare-for-streaming", ["", text, preset], true))
+  response.update.ids.chatArea.behaviour = { mode: "replace" }
+  response.functions = { ids: { chatList: "selectfirst" } }
+
+  runScript("submit-prompt", [response.variables.current_chat_file, text, preset], false)
+
+  return JSON.stringify(response)
+}

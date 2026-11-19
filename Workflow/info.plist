@@ -33,24 +33,11 @@
 				<false/>
 			</dict>
 		</array>
-		<key>41BD1E10-1726-4FC3-B753-D9460C4802E5</key>
-		<array>
-			<dict>
-				<key>destinationuid</key>
-				<string>B1FCE0C5-F9E7-47F8-A948-AAA4AABF8509</string>
-				<key>modifiers</key>
-				<integer>0</integer>
-				<key>modifiersubtext</key>
-				<string></string>
-				<key>vitoclose</key>
-				<false/>
-			</dict>
-		</array>
 		<key>832BCB52-D6AD-4B35-BD95-4983F6753FE8</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>0B1294BB-0426-43AD-AA79-7E3310B76A08</string>
+				<string>D9A3E5C1-4F6B-4C8A-B7E2-1B5A3F9C8D40</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -59,11 +46,76 @@
 				<true/>
 			</dict>
 		</array>
+		<key>A4D2F8C1-5B3E-4F60-8C7D-1E9B0A2C3D45</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>B7E1C3A9-2D4F-4A68-B5C0-9F3E1D7A6B28</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>B7E1C3A9-2D4F-4A68-B5C0-9F3E1D7A6B28</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>C8F2D4B0-3E5A-4B79-A6D1-0A4F2E8B7C39</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>C8F2D4B0-3E5A-4B79-A6D1-0A4F2E8B7C39</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>E0B4F6D2-5A7C-4D9B-A8F3-2C6B4A0D9E51</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>D9A3E5C1-4F6B-4C8A-B7E2-1B5A3F9C8D40</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>E0B4F6D2-5A7C-4D9B-A8F3-2C6B4A0D9E51</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
 		<key>DCD827BC-CD3F-4275-9316-6411DC7C90EE</key>
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>41BD1E10-1726-4FC3-B753-D9460C4802E5</string>
+				<string>6C1B7E52-0C5D-4E7A-9B1E-3F6C2D9A4E10</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>E0B4F6D2-5A7C-4D9B-A8F3-2C6B4A0D9E51</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>0B1294BB-0426-43AD-AA79-7E3310B76A08</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -76,7 +128,20 @@
 		<array>
 			<dict>
 				<key>destinationuid</key>
-				<string>0B1294BB-0426-43AD-AA79-7E3310B76A08</string>
+				<string>D9A3E5C1-4F6B-4C8A-B7E2-1B5A3F9C8D40</string>
+				<key>modifiers</key>
+				<integer>0</integer>
+				<key>modifiersubtext</key>
+				<string></string>
+				<key>vitoclose</key>
+				<false/>
+			</dict>
+		</array>
+		<key>F3B9A6D2-7C41-4E85-9A0B-2D6E8C1F4A57</key>
+		<array>
+			<dict>
+				<key>destinationuid</key>
+				<string>B7E1C3A9-2D4F-4A68-B5C0-9F3E1D7A6B28</string>
 				<key>modifiers</key>
 				<integer>0</integer>
 				<key>modifiersubtext</key>
@@ -112,25 +177,6 @@
 		<dict>
 			<key>config</key>
 			<dict>
-				<key>json</key>
-				<string>{
-  "alfredworkflow" : {
-    "config" : {
-      "launchmode" : 1
-    }
-  }
-}</string>
-			</dict>
-			<key>type</key>
-			<string>alfred.workflow.utility.json</string>
-			<key>uid</key>
-			<string>41BD1E10-1726-4FC3-B753-D9460C4802E5</string>
-			<key>version</key>
-			<integer>1</integer>
-		</dict>
-		<dict>
-			<key>config</key>
-			<dict>
 				<key>launchmode</key>
 				<integer>0</integer>
 				<key>path</key>
@@ -149,7 +195,7 @@
 			<key>config</key>
 			<dict>
 				<key>argumenttype</key>
-				<integer>2</integer>
+				<integer>1</integer>
 				<key>keyword</key>
 				<string>{var:chat_keyword}</string>
 				<key>skipuniversalaction</key>
@@ -159,7 +205,7 @@
 				<key>text</key>
 				<string>{const:alfred_workflow_name}</string>
 				<key>withspace</key>
-				<false/>
+				<true/>
 			</dict>
 			<key>type</key>
 			<string>alfred.workflow.input.keyword</string>
@@ -229,6 +275,189 @@
 			<key>version</key>
 			<integer>2</integer>
 		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>launchmode</key>
+				<integer>1</integer>
+				<key>path</key>
+				<string>chatwindow.alfredui</string>
+				<key>stackview</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.userinterface.alfredui</string>
+			<key>uid</key>
+			<string>6C1B7E52-0C5D-4E7A-9B1E-3F6C2D9A4E10</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>acceptsfiles</key>
+				<false/>
+				<key>acceptsmulti</key>
+				<integer>0</integer>
+				<key>acceptstext</key>
+				<true/>
+				<key>acceptsurls</key>
+				<true/>
+				<key>name</key>
+				<string>Ask Claude</string>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.universalaction</string>
+			<key>uid</key>
+			<string>A4D2F8C1-5B3E-4F60-8C7D-1E9B0A2C3D45</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>action</key>
+				<integer>0</integer>
+				<key>argument</key>
+				<integer>1</integer>
+				<key>focusedappvariable</key>
+				<false/>
+				<key>focusedappvariablename</key>
+				<string></string>
+				<key>hotkey</key>
+				<integer>0</integer>
+				<key>hotmod</key>
+				<integer>0</integer>
+				<key>leftcursor</key>
+				<false/>
+				<key>modsmode</key>
+				<integer>0</integer>
+				<key>relatedAppsMode</key>
+				<integer>0</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.trigger.hotkey</string>
+			<key>uid</key>
+			<string>F3B9A6D2-7C41-4E85-9A0B-2D6E8C1F4A57</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>argument</key>
+				<string></string>
+				<key>passthroughargument</key>
+				<false/>
+				<key>variables</key>
+				<dict>
+					<key>selected_text</key>
+					<string>{query}</string>
+				</dict>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.utility.argument</string>
+			<key>uid</key>
+			<string>B7E1C3A9-2D4F-4A68-B5C0-9F3E1D7A6B28</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>alfredfiltersresults</key>
+				<true/>
+				<key>alfredfiltersresultsmatchmode</key>
+				<integer>2</integer>
+				<key>argumenttreatemptyqueryasnil</key>
+				<false/>
+				<key>argumenttrimmode</key>
+				<integer>0</integer>
+				<key>argumenttype</key>
+				<integer>1</integer>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>keyword</key>
+				<string></string>
+				<key>queuedelaycustom</key>
+				<integer>3</integer>
+				<key>queuedelayimmediatelyinitially</key>
+				<true/>
+				<key>queuedelaymode</key>
+				<integer>0</integer>
+				<key>queuemode</key>
+				<integer>1</integer>
+				<key>runningsubtext</key>
+				<string></string>
+				<key>script</key>
+				<string>./chatwindow.alfredui/scripts/presets filter</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>skipuniversalaction</key>
+				<true/>
+				<key>subtext</key>
+				<string></string>
+				<key>title</key>
+				<string>Ask Claude</string>
+				<key>type</key>
+				<integer>11</integer>
+				<key>withspace</key>
+				<false/>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.input.scriptfilter</string>
+			<key>uid</key>
+			<string>C8F2D4B0-3E5A-4B79-A6D1-0A4F2E8B7C39</string>
+			<key>version</key>
+			<integer>3</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>argument</key>
+				<string></string>
+				<key>passthroughargument</key>
+				<false/>
+				<key>variables</key>
+				<dict>
+					<key>preset</key>
+					<string></string>
+					<key>selected_text</key>
+					<string>{query}</string>
+				</dict>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.utility.argument</string>
+			<key>uid</key>
+			<string>D9A3E5C1-4F6B-4C8A-B7E2-1B5A3F9C8D40</string>
+			<key>version</key>
+			<integer>1</integer>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>concurrently</key>
+				<false/>
+				<key>escaping</key>
+				<integer>102</integer>
+				<key>script</key>
+				<string>./chatwindow.alfredui/scripts/presets inbox</string>
+				<key>scriptargtype</key>
+				<integer>1</integer>
+				<key>scriptfile</key>
+				<string></string>
+				<key>type</key>
+				<integer>11</integer>
+			</dict>
+			<key>type</key>
+			<string>alfred.workflow.action.script</string>
+			<key>uid</key>
+			<string>E0B4F6D2-5A7C-4D9B-A8F3-2C6B4A0D9E51</string>
+			<key>version</key>
+			<integer>2</integer>
+		</dict>
 	</array>
 	<key>readme</key>
 	<string>## Setup
@@ -241,7 +470,13 @@ The workflow finds Claude Code by itself in the usual install locations. If it c
 
 ## Usage
 
-Launch the chat window with the `claude` keyword or the Hotkey.
+Launch the chat window with the `claude` keyword or the Hotkey. Type text after the keyword to start a new chat with it.
+
+To use Claude from anywhere, select text and choose the Ask Claude Universal Action, or set the second Hotkey to send the current selection. Then pick a preset, such as Fix spelling and grammar or Summarise, and the chat opens with the answer on its way. Pick Ask Claude to open a chat with the text and type your own question.
+
+In the chat window, choose a preset from the Presets menu (⌘P) and your next message is sent with it. Choose Edit Presets… there to add, change, reorder or delete presets.
+
+The regenerate button (⌘R) asks the last question again and replaces the reply. ⌘⇧C copies the last reply.
 
 Each chat keeps its own Claude Code session, so follow-up questions have the full conversation. You can switch models between messages.
 
@@ -251,44 +486,96 @@ Search your chats with the box above the list (⌘F), right-click a chat to copy
 		<key>0B1294BB-0426-43AD-AA79-7E3310B76A08</key>
 		<dict>
 			<key>xpos</key>
-			<real>275</real>
+			<real>750.0</real>
 			<key>ypos</key>
-			<real>105</real>
+			<real>250.0</real>
 		</dict>
-		<key>41BD1E10-1726-4FC3-B753-D9460C4802E5</key>
+		<key>6C1B7E52-0C5D-4E7A-9B1E-3F6C2D9A4E10</key>
 		<dict>
 			<key>xpos</key>
-			<real>440</real>
+			<real>950.0</real>
 			<key>ypos</key>
-			<real>65</real>
+			<real>165.0</real>
 		</dict>
 		<key>832BCB52-D6AD-4B35-BD95-4983F6753FE8</key>
 		<dict>
 			<key>xpos</key>
-			<real>85</real>
+			<real>85.0</real>
 			<key>ypos</key>
-			<real>85</real>
+			<real>85.0</real>
+		</dict>
+		<key>A4D2F8C1-5B3E-4F60-8C7D-1E9B0A2C3D45</key>
+		<dict>
+			<key>note</key>
+			<string>Send text or a URL from anywhere</string>
+			<key>xpos</key>
+			<real>85.0</real>
+			<key>ypos</key>
+			<real>375.0</real>
 		</dict>
 		<key>B1FCE0C5-F9E7-47F8-A948-AAA4AABF8509</key>
 		<dict>
 			<key>xpos</key>
-			<real>515</real>
+			<real>950.0</real>
 			<key>ypos</key>
-			<real>85</real>
+			<real>295.0</real>
+		</dict>
+		<key>B7E1C3A9-2D4F-4A68-B5C0-9F3E1D7A6B28</key>
+		<dict>
+			<key>xpos</key>
+			<real>275.0</real>
+			<key>ypos</key>
+			<real>470.0</real>
+		</dict>
+		<key>C8F2D4B0-3E5A-4B79-A6D1-0A4F2E8B7C39</key>
+		<dict>
+			<key>note</key>
+			<string>Choose a preset, or just open a chat</string>
+			<key>xpos</key>
+			<real>370.0</real>
+			<key>ypos</key>
+			<real>440.0</real>
+		</dict>
+		<key>D9A3E5C1-4F6B-4C8A-B7E2-1B5A3F9C8D40</key>
+		<dict>
+			<key>xpos</key>
+			<real>275.0</real>
+			<key>ypos</key>
+			<real>180.0</real>
 		</dict>
 		<key>DCD827BC-CD3F-4275-9316-6411DC7C90EE</key>
 		<dict>
 			<key>xpos</key>
-			<real>370</real>
+			<real>845.0</real>
 			<key>ypos</key>
-			<real>65</real>
+			<real>210.0</real>
+		</dict>
+		<key>E0B4F6D2-5A7C-4D9B-A8F3-2C6B4A0D9E51</key>
+		<dict>
+			<key>note</key>
+			<string>Leave the text for the chat window</string>
+			<key>xpos</key>
+			<real>560.0</real>
+			<key>ypos</key>
+			<real>230.0</real>
 		</dict>
 		<key>E9FE01A1-31CF-4CC7-ABBE-7B714E9F5DE5</key>
 		<dict>
+			<key>note</key>
+			<string>Open the chat window</string>
 			<key>xpos</key>
-			<real>85</real>
+			<real>85.0</real>
 			<key>ypos</key>
-			<real>230</real>
+			<real>230.0</real>
+		</dict>
+		<key>F3B9A6D2-7C41-4E85-9A0B-2D6E8C1F4A57</key>
+		<dict>
+			<key>note</key>
+			<string>Send the selected text</string>
+			<key>xpos</key>
+			<real>85.0</real>
+			<key>ypos</key>
+			<real>520.0</real>
 		</dict>
 	</dict>
 	<key>userconfigurationconfig</key>
@@ -493,7 +780,7 @@ Search your chats with the box above the list (⌘F), right-click a chat to copy
 		<string>api_key</string>
 	</array>
 	<key>version</key>
-	<string>1.1</string>
+	<string>1.2</string>
 	<key>webaddress</key>
 	<string>https://github.com/mikomagni/alfred-claude-chat</string>
 </dict>
