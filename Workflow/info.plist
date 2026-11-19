@@ -387,7 +387,7 @@ Each chat keeps its own Claude Code session, so follow-up questions have the ful
 				</array>
 			</dict>
 			<key>description</key>
-			<string>Always uses the latest version of the chosen model.</string>
+			<string>Named models always use the latest version. Numbered ones stay fixed.</string>
 			<key>label</key>
 			<string>Model</string>
 			<key>type</key>
