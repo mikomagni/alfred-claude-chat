@@ -1,0 +1,66 @@
+#!/usr/bin/osascript -l JavaScript
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function run(argv) {
+  const chatFile = argv[0]
+  const prompt = argv[1]
+
+  if (prompt.trim().length === 0) return JSON.stringify({ sound: { src: "Basso" }})
+
+  const response = {
+    pulse: { interval: 0.1 },
+    update: { ids: {
+      chatArea: {
+        behaviour: { mode: "append" },
+        text: `\n\n> [!alfredSelectedResultBackgroundColor:questionmark.circle:Question]\n${prompt.split("\n").map(line => `> ${line}  `).join("\n")}\n\n`
+      },
+      submitPromptButton: {
+        image: { type: "symbol", src: "stop.circle.fill" },
+        events: [{
+          triggers: "actioned",
+          action: { variables: { stop_streaming: true } }
+        }]
+      },
+      newChatButton: { enabled: false },
+      deleteAllButton: { enabled: false },
+      chatList: { enabled: false },
+      promptField: { enabled: false }
+    }}
+  }
+
+  if (chatFile.length === 0) {
+    const uuid = $.NSProcessInfo.processInfo.globallyUniqueString.js.replace(/-.*/, "")
+
+    const now = new Date()
+    const padDate = number => number.toString().padStart(2, "0")
+
+    const dateTime = [
+      now.getFullYear(),
+      padDate(now.getMonth() + 1),
+      padDate(now.getDate()),
+      padDate(now.getHours()),
+      padDate(now.getMinutes()),
+      padDate(now.getSeconds()),
+    ].join(".")
+
+    const newChatFile = $(envVar("alfred_workflow_data")).stringByAppendingPathComponent(`${dateTime}-${uuid}.json`).js
+
+    response.variables = { current_chat_file: newChatFile }
+    response.update.ids.chatList.hidden = false
+    response.update.ids.chatList.data = { modify: { insert: {
+      position: "before",
+      src: [{
+        "uid": newChatFile,
+        "chatName.text": prompt
+      }]
+    }}}
+  }
+
+  return JSON.stringify(response)
+}

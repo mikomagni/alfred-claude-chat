@@ -1,0 +1,28 @@
+#!/usr/bin/osascript -l JavaScript
+
+// "init": select the saved (or configured) model when the window opens
+// "save <value>": remember the model chosen in the dropdown
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function run(argv) {
+  const [mode, value] = argv
+  const cacheDir = envVar("alfred_workflow_cache")
+  const stateFile = `${cacheDir}/model.txt`
+
+  if (mode === "save") {
+    $.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(cacheDir, true, undefined, undefined)
+    $(value || "default").writeToFileAtomicallyEncodingError(stateFile, true, $.NSUTF8StringEncoding, undefined)
+    return
+  }
+
+  const saved = $.NSString.stringWithContentsOfFileEncodingError(stateFile, $.NSUTF8StringEncoding, undefined).js
+  const current = (saved == null ? envVar("model_id") : saved.trim()) || "default"
+
+  return JSON.stringify({ update: { ids: { modelPicker: { selected: current } } } })
+}

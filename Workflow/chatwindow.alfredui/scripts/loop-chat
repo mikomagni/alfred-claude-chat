@@ -1,0 +1,116 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Helpers
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function fileModified(path) {
+  return $.NSFileManager.defaultManager
+    .attributesOfItemAtPathError(path, undefined)
+    .js["NSFileModificationDate"].js
+    .getTime()
+}
+
+function appendChat(path, message) {
+  const initChatString = $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
+  const ongoingChat = JSON.parse(initChatString).concat(message)
+  $(JSON.stringify(ongoingChat)).writeToFileAtomicallyEncodingError(path, true, $.NSUTF8StringEncoding, undefined)
+}
+
+function endStreaming(chatAreaObj) {
+  const endStreamingScript = $.NSFileManager.defaultManager
+    .currentDirectoryPath
+    .stringByAppendingPathComponent("scripts/end-streaming").js
+
+  const task = $.NSTask.alloc.init
+  const stdout = $.NSPipe.pipe
+
+  task.executableURL = $.NSURL.fileURLWithPath(endStreamingScript)
+  task.arguments = [ JSON.stringify(chatAreaObj) ]
+  task.standardOutput = stdout
+  task.launchAndReturnError(false)
+
+  const dataOut = stdout.fileHandleForReading.readDataToEndOfFileAndReturnError(false)
+  return $.NSString.alloc.initWithDataEncoding(dataOut, $.NSUTF8StringEncoding).js
+}
+
+// Main
+function run(argv) {
+  const chatFile = argv[0]
+  const stopStreaming = envVar("stop_streaming") === "1"
+  const timeoutSeconds = parseInt(envVar("timeout_seconds")) || 30
+  const streamFile = `${envVar("alfred_workflow_cache")}/stream.txt`
+  const streamString = $.NSString.stringWithContentsOfFileEncodingError(streamFile, $.NSUTF8StringEncoding, undefined).js || ""
+
+  // One JSON event per line; the last line may still be half-written
+  const lines = streamString.split("\n").filter(line => line.trim())
+  const events = lines.flatMap(line => { try { return [JSON.parse(line)] } catch { return [] } })
+  const strayOutput = lines.filter(line => !line.trim().startsWith("{")).join("\n")
+
+  const sessionId = events.find(item => item.session_id)?.session_id
+  const assistantMessage = content => sessionId
+    ? { role: "assistant", content, session_id: sessionId }
+    : { role: "assistant", content }
+
+  const responseText = events
+    .filter(item => item.type === "stream_event"
+      && item.event?.type === "content_block_delta"
+      && item.event.delta?.type === "text_delta")
+    .map(item => item.event.delta.text)
+    .join("")
+
+  const result = events.find(item => item.type === "result")
+
+  // Still streaming
+  if (!result) {
+    const stalled = new Date().getTime() - fileModified(streamFile) > timeoutSeconds * 1000
+
+    if (stalled) {
+      if (responseText.length > 0) appendChat(chatFile, assistantMessage(responseText))
+
+      return endStreaming({
+        behaviour: { mode: "replacelast", scroll: "end" },
+        text: responseText.length > 0
+          ? `${responseText} [Connection Stalled]`
+          : (strayOutput || "[No response from Claude Code]")
+      })
+    }
+
+    if (stopStreaming) {
+      appendChat(chatFile, assistantMessage(responseText))
+
+      return endStreaming({
+        behaviour: { mode: "replacelast", scroll: "end" },
+        text: `${responseText} [Answer Interrupted]`
+      })
+    }
+
+    if (streamString.length === 0) return
+
+    return JSON.stringify({ update: { ids: { chatArea: {
+      behaviour: { mode: "replacelast", scroll: "end" },
+      text: responseText
+    }}}})
+  }
+
+  // Finished with an error (not logged in, usage limit reached, etc.)
+  if (result.is_error) {
+    return endStreaming({
+      behaviour: { mode: "replacelast" },
+      text: `**Error:** ${result.result || result.subtype || "Unknown error"}`
+    })
+  }
+
+  // Finished normally
+  const finalText = typeof result.result === "string" && result.result.length > 0 ? result.result : responseText
+  appendChat(chatFile, assistantMessage(finalText))
+
+  return endStreaming({
+    behaviour: { mode: "replacelast", scroll: "end" },
+    text: finalText
+  })
+}

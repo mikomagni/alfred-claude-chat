@@ -1,0 +1,8 @@
+#!/usr/bin/osascript -l JavaScript
+
+function run(argv) {
+  const fullChat = $.NSString.stringWithContentsOfFileEncodingError(argv[0], $.NSUTF8StringEncoding, undefined).js
+  const lastResponse = JSON.parse(fullChat).findLast(entry => entry.role === "assistant").content
+
+  return JSON.stringify({ variables: { last_response: lastResponse }})
+}

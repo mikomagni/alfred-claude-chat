@@ -1,0 +1,52 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Helpers
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function readFile(path) {
+  return $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
+}
+
+function trashFile(path) {
+  $.NSFileManager.defaultManager.trashItemAtURLResultingItemURLError($.NSURL.fileURLWithPath(path), undefined, undefined)
+}
+
+function kill(pid) {
+  ObjC.import("signal")
+  $.kill(pid, $.SIGTERM)
+}
+
+// Main
+function run(argv) {
+  const chatAreaObj = JSON.parse(argv[0] || "{}")
+  const pidStreamFile = `${envVar("alfred_workflow_cache")}/pid.txt`
+  const streamFile = `${envVar("alfred_workflow_cache")}/stream.txt`
+
+  // Guard: kill(0) would signal the whole process group
+  const pid = parseInt(readFile(pidStreamFile))
+  if (pid > 0) kill(pid)
+
+  trashFile(pidStreamFile)
+  trashFile(streamFile)
+
+  return JSON.stringify({
+    pulse: { interval: 0 },
+    variables: { stop_streaming: false },
+    update: { ids: {
+      chatArea: chatAreaObj,
+      submitPromptButton: {
+        image: { type: "symbol", src: "arrow.up.circle.fill" },
+        events: [{ triggers: "actioned", action: "{var:submit_prompt}" }]
+      },
+      newChatButton: { enabled: true },
+      deleteAllButton: { enabled: true },
+      chatList: { enabled: true },
+      promptField: { enabled: true, focus: true, text: "" }
+    }}
+  })
+}

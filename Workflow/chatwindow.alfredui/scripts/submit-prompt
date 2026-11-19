@@ -1,0 +1,228 @@
+#!/usr/bin/osascript -l JavaScript
+
+const SYSTEM_PROMPT = [
+  "You are Claude, chatting with the user in a small Mac chat window opened from Alfred.",
+  "Answer conversationally and use Markdown when it helps.",
+  "You have no tools, files or web access in this chat."
+].join(" ")
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function writeFile(path, text) {
+  $.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(
+    $(path).stringByDeletingLastPathComponent.js, true, undefined, undefined)
+
+  $(text).writeToFileAtomicallyEncodingError(path, true, $.NSUTF8StringEncoding, undefined)
+}
+
+function readChat(path) {
+  const chatString = $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js || "[]"
+  return JSON.parse(chatString)
+}
+
+// The chat's latest Claude Code session ID, but only if the session is still on disk
+function resumableSession(chat) {
+  const sessionId = chat.findLast(message => message.role === "assistant" && message.session_id)?.session_id
+  if (!sessionId) return undefined
+
+  const configDir = envVar("CLAUDE_CONFIG_DIR") || "~/.claude"
+  const projectsDir = $(`${configDir}/projects`).stringByExpandingTildeInPath.js
+  const fileManager = $.NSFileManager.defaultManager
+  const projects = ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(projectsDir, undefined)) || []
+
+  const found = projects.some(project => fileManager.fileExistsAtPath(`${projectsDir}/${project}/${sessionId}.jsonl`))
+  return found ? sessionId : undefined
+}
+
+// Fallback when there's no session to resume: fold recent history into one prompt
+function transcriptPrompt(messages) {
+  const latest = messages[messages.length - 1].content
+  const history = messages.slice(0, -1)
+
+  if (history.length === 0) return latest
+
+  const transcript = history
+    .map(message => `${message.role === "user" ? "User" : "Assistant"}: ${message.content}`)
+    .join("\n\n")
+
+  return `Earlier in this conversation:\n\n<history>\n${transcript}\n</history>\n\nMy new message:\n\n${latest}`
+}
+
+// The model chosen in the chat window's dropdown, or the configured default
+function currentModel(cacheDir) {
+  const saved = $.NSString.stringWithContentsOfFileEncodingError(cacheDir + "/model.txt", $.NSUTF8StringEncoding, undefined).js
+  const model = saved == null ? envVar("model_id") : saved.trim()
+  return model === "default" ? "" : model
+}
+
+function isExecutable(path) {
+  const isDirectory = Ref()
+  const fileManager = $.NSFileManager.defaultManager
+  return fileManager.fileExistsAtPathIsDirectory(path, isDirectory)
+    && !isDirectory[0]
+    && fileManager.isExecutableFileAtPath(path)
+}
+
+// Newest first, so the latest Node version's install wins
+function nodeVersionBins(versionsDir, binSubpath) {
+  const dir = $(versionsDir).stringByExpandingTildeInPath.js
+  const versions = ObjC.deepUnwrap($.NSFileManager.defaultManager.contentsOfDirectoryAtPathError(dir, undefined)) || []
+
+  return versions
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))
+    .map(version => `${dir}/${version}/${binSubpath}/claude`)
+}
+
+// Last resort: ask a login shell, which sees PATH changes made in the shell profile
+function claudeFromLoginShell() {
+  const shell = envVar("SHELL") || "/bin/zsh"
+  if (!isExecutable(shell)) return undefined
+
+  const task = $.NSTask.alloc.init
+  const stdout = $.NSPipe.pipe
+
+  task.executableURL = $.NSURL.fileURLWithPath(shell)
+  task.arguments = ["-lc", "command -v claude"]
+  task.standardInput = $.NSFileHandle.fileHandleWithNullDevice
+  task.standardOutput = stdout
+  task.standardError = $.NSFileHandle.fileHandleWithNullDevice
+  if (!task.launchAndReturnError(false)) return undefined
+
+  const data = stdout.fileHandleForReading.readDataToEndOfFileAndReturnError(false)
+  const lines = ($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js || "").split("\n")
+
+  return lines.map(line => line.trim()).reverse().find(line => line.startsWith("/") && isExecutable(line))
+}
+
+// Where Claude Code usually lives on macOS, most common first
+function findClaude() {
+  const candidates = [
+    "~/.local/bin/claude",        // Native installer
+    "/opt/homebrew/bin/claude",   // Homebrew, Apple silicon
+    "/usr/local/bin/claude",      // Homebrew on Intel, or npm with system Node
+    "~/.claude/local/claude",     // Older local install
+    "~/.npm-global/bin/claude",   // npm with a custom prefix
+    "~/.bun/bin/claude",
+    "~/.volta/bin/claude",
+    "~/Library/pnpm/claude",
+    "~/.yarn/bin/claude",
+    "~/.local/share/mise/shims/claude",
+    "~/.asdf/shims/claude",
+    "/opt/local/bin/claude",      // MacPorts
+    "/run/current-system/sw/bin/claude", // Nix
+    "~/.nix-profile/bin/claude"
+  ].map(path => $(path).stringByExpandingTildeInPath.js)
+    .concat(nodeVersionBins("~/.nvm/versions/node", "bin"))
+    .concat(nodeVersionBins("~/.local/share/fnm/node-versions", "installation/bin"))
+
+  return candidates.find(isExecutable) || claudeFromLoginShell()
+}
+
+function startStream({ claudePath, claudeError, modelId, sessionId, prompt, streamFile, pidStreamFile, workDir }) {
+  const fileManager = $.NSFileManager.defaultManager
+  fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(workDir, true, undefined, undefined)
+  fileManager.createFileAtPathContentsAttributes(streamFile, undefined, undefined)
+
+  if (!claudePath) {
+    writeFile(streamFile, JSON.stringify({ type: "result", is_error: true, result: claudeError }))
+    return
+  }
+
+  const output = $.NSFileHandle.fileHandleForWritingAtPath(streamFile)
+
+  // Alfred doesn't load your shell profile, so give Claude Code a usable PATH
+  // (its own folder first, so an npm install finds the matching node),
+  // and use the API key from the workflow configuration if there is one.
+  // Without one, drop any inherited key so your Claude plan login is used
+  const apiKey = (envVar("api_key") || "").trim()
+  const environment = $.NSMutableDictionary.dictionaryWithDictionary($.NSProcessInfo.processInfo.environment)
+  environment.removeObjectForKey("api_key")
+  if (apiKey) environment.setObjectForKey(apiKey, "ANTHROPIC_API_KEY")
+  else environment.removeObjectForKey("ANTHROPIC_API_KEY")
+  environment.setObjectForKey(
+    `${$(claudePath).stringByDeletingLastPathComponent.js}:${envVar("HOME")}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`,
+    "PATH")
+
+  const args = [
+    "-p",
+    "--output-format", "stream-json",
+    "--verbose",
+    "--include-partial-messages",
+    "--system-prompt", SYSTEM_PROMPT,
+    "--strict-mcp-config", // Don't start your MCP servers for every message
+    "--tools", ""          // No file or shell access. Remove this line if your Claude Code version rejects it
+  ]
+  if (modelId) args.push("--model", modelId)
+  if (sessionId) args.push("--resume", sessionId)
+
+  const task = $.NSTask.alloc.init
+  const input = $.NSPipe.pipe
+
+  task.executableURL = $.NSURL.fileURLWithPath(claudePath)
+  task.currentDirectoryURL = $.NSURL.fileURLWithPath(workDir)
+  task.environment = environment
+  task.arguments = args
+  task.standardInput = input
+  task.standardOutput = output
+  task.standardError = output
+
+  if (!task.launchAndReturnError(false)) {
+    writeFile(streamFile, JSON.stringify({
+      type: "result",
+      is_error: true,
+      result: `Couldn't start Claude Code at \`${claudePath}\`. Check Claude Path in the workflow configuration.`
+    }))
+    return
+  }
+
+  writeFile(pidStreamFile, task.processIdentifier.toString())
+
+  // Prompt goes in through stdin so long text, or text starting with "-", is never read as a flag
+  const writer = input.fileHandleForWriting
+  writer.writeData($(prompt).dataUsingEncoding($.NSUTF8StringEncoding))
+  writer.closeFile
+}
+
+function run(argv) {
+  const chatFile = argv[0]
+  const prompt = argv[1]
+
+  if (prompt.trim().length === 0) return
+
+  const cacheDir = envVar("alfred_workflow_cache")
+  const maxContext = parseInt(envVar("max_context")) || 24
+
+  // A path set in the configuration always wins; leave it empty to search the usual places
+  const configuredPath = (envVar("claude_path") || "").trim()
+  const expandedPath = $(configuredPath).stringByExpandingTildeInPath.js
+  const claudePath = configuredPath ? (isExecutable(expandedPath) ? expandedPath : undefined) : findClaude()
+  const claudeError = configuredPath
+    ? `Couldn't find Claude Code at \`${configuredPath}\`. Fix Claude Path in the workflow configuration, or clear it to search the usual install locations.`
+    : "Couldn't find Claude Code in the usual install locations. Run `which claude` in Terminal and paste the result into Claude Path in the workflow configuration."
+
+  const previousChat = readChat(chatFile)
+  const ongoingChat = previousChat.concat({ role: "user", content: prompt })
+  const sessionId = resumableSession(previousChat)
+
+  const claudePrompt = sessionId
+    ? prompt
+    : transcriptPrompt(ongoingChat.filter(m => m.role === "user" || m.role === "assistant").slice(-maxContext))
+
+  writeFile(chatFile, JSON.stringify(ongoingChat))
+
+  startStream({
+    claudePath,
+    claudeError,
+    modelId: currentModel(cacheDir),
+    sessionId,
+    prompt: claudePrompt,
+    streamFile: `${cacheDir}/stream.txt`,
+    pidStreamFile: `${cacheDir}/pid.txt`,
+    workDir: cacheDir
+  })
+}

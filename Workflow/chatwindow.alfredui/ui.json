@@ -1,0 +1,398 @@
+{
+  "log": {
+    "level": "info",
+    "internal": true
+  },
+  "iconpath": "../icon.png",
+  "variablesconfig": {
+    "claude_path": {
+      "src": "variable",
+      "scriptenv": true
+    },
+    "api_key": {
+      "src": "variable",
+      "scriptenv": true
+    },
+    "model_id": {
+      "src": "variable",
+      "scriptenv": true
+    },
+    "max_context": {
+      "src": "variable",
+      "scriptenv": true
+    },
+    "timeout_seconds": {
+      "src": "variable",
+      "scriptenv": true
+    },
+    "stop_streaming": {
+      "default": false,
+      "scriptenv": true
+    }
+  },
+  "variables": {
+    "current_chat_file": null,
+    "new_chat": [
+      {
+        "type": "json",
+        "src": {
+          "variables": {
+            "current_chat_file": null
+          },
+          "update": {
+            "ids": {
+              "chatArea": {
+                "behaviour": {
+                  "mode": "replace"
+                }
+              },
+              "promptField": {
+                "focus": true
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "src": "chatList",
+        "args": "selectnone"
+      }
+    ],
+    "submit_prompt": [
+      {
+        "type": "script",
+        "src": "scripts/prepare-for-streaming",
+        "args": [
+          "{var:current_chat_file}",
+          "{value:promptField.text}"
+        ]
+      },
+      {
+        "type": "script",
+        "async": true,
+        "src": "scripts/submit-prompt",
+        "args": [
+          "{var:current_chat_file}",
+          "{value:promptField.text}"
+        ]
+      },
+      {
+        "type": "json",
+        "src": {
+          "update": {
+            "ids": {
+              "chatArea": {
+                "behaviour": {
+                  "mode": "append"
+                },
+                "text": "…"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "pulse": {
+    "interval": 0,
+    "intervalmode": "delay",
+    "src": "scripts/loop-chat",
+    "args": "{var:current_chat_file}"
+  },
+  "window": {
+    "title": "Claude Chat",
+    "titlevisibility": false,
+    "titlebarappearstransparent": true,
+    "fullsizecontentview": true,
+    "blur": true,
+    "toolbar": {
+      "type": "unified"
+    },
+    "size": {
+      "width": 800,
+      "height": 600
+    },
+    "root": {
+      "type": "view",
+      "layout": "border",
+      "components": [
+        {
+          "constraints": {
+            "region": "left",
+            "size": {
+              "width": 256
+            }
+          },
+          "type": "view",
+          "layout": "border",
+          "components": [
+            {
+              "constraints": {
+                "region": "top",
+                "position": "right",
+                "insets": {
+                  "top": 2
+                }
+              },
+              "type": "view",
+              "layout": "inline",
+              "padding": 8,
+              "spacing": 8,
+              "components": [
+                {
+                  "constraints": {
+                    "size": 32
+                  },
+                  "id": "newChatButton",
+                  "type": "button",
+                  "image": {
+                    "type": "symbol",
+                    "src": "plus"
+                  },
+                  "font": {
+                    "size": 16
+                  },
+                  "bordershape": "circle",
+                  "effect": "glass",
+                  "shortcut": "⌘N",
+                  "tooltip": "New Chat ⌘N",
+                  "events": [
+                    {
+                      "triggers": "actioned",
+                      "action": "{var:new_chat}"
+                    }
+                  ]
+                },
+                {
+                  "constraints": {
+                    "size": 32
+                  },
+                  "id": "deleteAllButton",
+                  "type": "button",
+                  "image": {
+                    "type": "symbol",
+                    "src": "flame"
+                  },
+                  "font": {
+                    "size": 16
+                  },
+                  "bordershape": "circle",
+                  "effect": "glass",
+                  "shortcut": "⌘⇧⌫",
+                  "tooltip": "Delete All Chats ⌘⇧⌫",
+                  "events": [
+                    {
+                      "triggers": "actioned",
+                      "confirm": {
+                        "message": "Delete All Chats?",
+                        "informativetext": "They will be sent to the trash.",
+                        "confirmbuttontext": "Delete"
+                      },
+                      "action": [
+                        {
+                          "type": "script",
+                          "src": "/usr/bin/trash",
+                          "args": "{const:alfred_workflow_data}"
+                        },
+                        {
+                          "type": "script",
+                          "src": "scripts/load-chat-list"
+                        },
+                        "{var:new_chat}"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "constraints": {
+                "region": "centre"
+              },
+              "type": "view",
+              "layout": "stack",
+              "padding": 8,
+              "components": [
+                "{file:chatlist.json}"
+              ]
+            }
+          ]
+        },
+        {
+          "constraints": {
+            "region": "centre"
+          },
+          "type": "view",
+          "layout": "border",
+          "background": {
+            "light": "#ffffff77",
+            "dark": "#00000077"
+          },
+          "padding": 16,
+          "spacing": 8,
+          "components": [
+            {
+              "constraints": {
+                "region": "centre"
+              },
+              "id": "chatArea",
+              "type": "markdownarea",
+              "background": null,
+              "autoadjustcontentinsets": false
+            },
+            {
+              "constraints": {
+                "region": "bottom",
+                "size": {
+                  "height": 112
+                }
+              },
+              "type": "view",
+              "layout": "border",
+              "padding": 8,
+              "spacing": 8,
+              "background": "#00000033",
+              "cornerradius": 8,
+              "components": [
+                {
+                  "constraints": {
+                    "region": "centre"
+                  },
+                  "id": "promptField",
+                  "type": "textfield",
+                  "placeholder": "Ask Claude",
+                  "multiline": true,
+                  "linebreak": "wrap",
+                  "bordered": false,
+                  "background": null,
+                  "focus": true,
+                  "focusring": false,
+                  "font": {
+                    "size": 16
+                  },
+                  "events": [
+                    {
+                      "triggers": "actioned",
+                      "action": "{var:submit_prompt}"
+                    }
+                  ]
+                },
+                {
+                  "id": "controlsRow",
+                  "constraints": {
+                    "region": "bottom"
+                  },
+                  "type": "view",
+                  "layout": "border",
+                  "components": [
+                    {
+                      "id": "modelPicker",
+                      "constraints": {
+                        "region": "left"
+                      },
+                      "type": "picker",
+                      "font": {
+                        "size": 13
+                      },
+                      "items": [
+                        {
+                          "text": "Sonnet",
+                          "value": "sonnet"
+                        },
+                        {
+                          "text": "Opus",
+                          "value": "opus"
+                        },
+                        {
+                          "text": "Haiku",
+                          "value": "haiku"
+                        },
+                        {
+                          "type": "separator"
+                        },
+                        {
+                          "text": "Fable",
+                          "value": "fable"
+                        },
+                        {
+                          "text": "Best available",
+                          "value": "best"
+                        },
+                        {
+                          "text": "Opus (1M context)",
+                          "value": "opus[1m]"
+                        },
+                        {
+                          "type": "separator"
+                        },
+                        {
+                          "text": "Opus 5",
+                          "value": "claude-opus-5"
+                        },
+                        {
+                          "text": "Sonnet 5",
+                          "value": "claude-sonnet-5"
+                        },
+                        {
+                          "text": "Opus 4.8",
+                          "value": "claude-opus-4-8"
+                        },
+                        {
+                          "text": "Fable 5",
+                          "value": "claude-fable-5"
+                        },
+                        {
+                          "type": "separator"
+                        },
+                        {
+                          "text": "Default",
+                          "value": "default"
+                        }
+                      ],
+                      "events": [
+                        {
+                          "triggers": "changed",
+                          "action": {
+                            "type": "script",
+                            "src": "scripts/model-picker",
+                            "args": [
+                              "save",
+                              "{value:self.selected.value}"
+                            ]
+                          }
+                        }
+                      ],
+                      "bordered": false
+                    },
+                    {
+                      "constraints": {
+                        "region": "right"
+                      },
+                      "id": "submitPromptButton",
+                      "type": "button",
+                      "bordered": false,
+                      "font": {
+                        "size": 16
+                      },
+                      "image": {
+                        "type": "symbol",
+                        "src": "arrow.up.circle.fill"
+                      },
+                      "events": [
+                        {
+                          "triggers": "actioned",
+                          "action": "{var:submit_prompt}"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

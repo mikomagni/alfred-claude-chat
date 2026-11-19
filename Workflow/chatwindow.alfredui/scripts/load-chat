@@ -1,0 +1,43 @@
+#!/usr/bin/osascript -l JavaScript
+
+function markdownChat(messages) {
+  return messages.reduce((accumulator, current, index, allMessages) => {
+    if (current["role"] === "assistant")
+      return `${accumulator}\n\n${current["content"]}`
+
+    if (current["role"] === "user") {
+      const userMessage = `> [!alfredSelectedResultBackgroundColor:questionmark.circle:Question]\n${current["content"].split("\n").map(line => `> ${line}  `).join("\n")}`
+      const userTwice = allMessages[index + 1]?.["role"] === "user" // "user" role twice in a row
+      const lastMessage = index === allMessages.length - 1 // "user" is last message
+
+      if (userTwice || lastMessage) return `${accumulator}\n\n${userMessage}\n\n[Answer Interrupted]`
+
+      return `${accumulator}\n\n${userMessage}`
+    }
+
+    // Ignore any other role
+    return accumulator
+  }, "")
+}
+
+function run(argv) {
+  const chatPath = argv[0]
+
+  // Clear the chat area and variable when no chat is selected
+  if (chatPath.length === 0) return JSON.stringify({
+    variables: { current_chat_file: null },
+    update: { ids: { chatArea: { text: "" }}}
+  })
+
+  // Load existing chat
+  const chatString = $.NSString.stringWithContentsOfFileEncodingError(chatPath, $.NSUTF8StringEncoding, undefined).js
+  const chatJSON = JSON.parse(chatString)
+
+  return JSON.stringify({
+    variables: { current_chat_file: chatPath },
+    update: { ids: {
+      chatArea: { text: markdownChat(chatJSON), behaviour: { mode: "replace", scroll: "end" } },
+      promptField: { focus: true }
+    }}
+  })
+}

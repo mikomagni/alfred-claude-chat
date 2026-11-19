@@ -1,0 +1,45 @@
+#!/usr/bin/osascript -l JavaScript
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function dirContents(dirPathString) {
+  return $.NSFileManager
+    .defaultManager
+    .contentsOfDirectoryAtURLIncludingPropertiesForKeysOptionsError(
+      $.NSURL.fileURLWithPath(dirPathString),
+      undefined,
+      $.NSDirectoryEnumerationSkipsHiddenFiles,
+      undefined).js
+    ?.sort((a, b) => b.path.js.localeCompare(a.path.js))
+}
+
+function readFile(path) {
+  return $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
+}
+
+// With "visibility" as the argument, only show or hide the list, leaving its contents and selection alone
+function run(argv) {
+  const chatData = dirContents(envVar("alfred_workflow_data"))
+    ?.flatMap(url => {
+      if (url.pathExtension.js !== "json") return []
+
+      const file = url.path.js
+      const firstMessage = JSON.parse(readFile(file)).find(entry => entry.role === "user").content
+
+      return {
+        "uid": file,
+        "chatName.text": firstMessage,
+      }
+    }) || []
+
+  // An empty list still draws its scrollbar, so hide the list until there's a chat in it
+  const chatList = { hidden: chatData.length === 0 }
+  if (argv[0] !== "visibility") chatList.data = { src: chatData }
+
+  return JSON.stringify({ update: { ids: { chatList }}})
+}

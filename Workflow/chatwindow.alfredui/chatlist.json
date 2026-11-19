@@ -1,0 +1,182 @@
+{
+  "id": "chatList",
+  "type": "dataview",
+  "events": [
+    {
+      "triggers": "launched",
+      "action": [
+        {
+          "type": "script",
+          "src": "scripts/load-chat-list"
+        },
+        {
+          "type": "function",
+          "src": "chatList",
+          "args": "selectfirst"
+        },
+        {
+          "type": "script",
+          "src": "scripts/model-picker",
+          "args": "init"
+        }
+      ]
+    },
+    {
+      "triggers": "changed",
+      "action": {
+        "type": "script",
+        "src": "scripts/load-chat",
+        "args": "{value:self.selected.uid}"
+      }
+    }
+  ],
+  "behaviour": {
+    "selection": {
+      "allowempty": true
+    }
+  },
+  "cell": {
+    "height": 32,
+    "init": {
+      "chatListCell.background": null,
+      "chatName.colour": "labelColor",
+      "chatListActionButtons.hidden": true,
+      "chatListActionButtons.constraints.size.width": 1,
+      "chatListCopyButton.contenttintcolour": "labelColor",
+      "chatListDeleteButton.contenttintcolour": "labelColor"
+    },
+    "selected": {
+      "chatListCell.background": "alfredSelectedResultBackgroundColor",
+      "chatName.colour": "alfredSelectedResultTextColor",
+      "chatListActionButtons.hidden": false,
+      "chatListActionButtons.constraints.size.width": 0,
+      "chatListCopyButton.contenttintcolour": "alfredSelectedResultTextColor",
+      "chatListDeleteButton.contenttintcolour": "alfredSelectedResultTextColor"
+    },
+    "root": {
+      "id": "chatListCell",
+      "type": "view",
+      "layout": "border",
+      "padding": 8,
+      "spacing": 4,
+      "cornerradius": 4,
+      "components": [
+        {
+          "constraints": {
+            "region": "centre"
+          },
+          "id": "chatName",
+          "type": "label"
+        },
+        {
+          "constraints": {
+            "region": "right"
+          },
+          "id": "chatListActionButtons",
+          "type": "view",
+          "layout": "inline",
+          "direction": "horizontal",
+          "spacing": 4,
+          "components": [
+            {
+              "id": "chatListCopyButton",
+              "type": "button",
+              "bordered": false,
+              "image": {
+                "type": "symbol",
+                "src": "list.clipboard"
+              },
+              "font": {
+                "size": 16
+              },
+              "tooltip": "Copy Last Message",
+              "events": [
+                {
+                  "triggers": "actioned",
+                  "action": [
+                    {
+                      "type": "script",
+                      "src": "scripts/copy-response",
+                      "args": "{data:uid}"
+                    },
+                    {
+                      "type": "json",
+                      "src": {
+                        "copy": {
+                          "type": "text",
+                          "src": "{var:last_response}"
+                        },
+                        "sound": {
+                          "src": "Blow"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "chatListDeleteButton",
+              "type": "button",
+              "bordered": false,
+              "image": {
+                "type": "symbol",
+                "src": "trash"
+              },
+              "font": {
+                "size": 16
+              },
+              "tooltip": "Delete Chat",
+              "events": [
+                {
+                  "triggers": "actioned",
+                  "confirm": {
+                    "message": "Delete Chat?",
+                    "informativetext": "It will be sent to the trash.",
+                    "confirmbuttontext": "Delete"
+                  },
+                  "action": [
+                    {
+                      "type": "script",
+                      "src": "/usr/bin/trash",
+                      "args": "{data:uid}"
+                    },
+                    {
+                      "type": "json",
+                      "variables": {
+                        "remove_chat": "{data:uid}"
+                      },
+                      "src": {
+                        "update": {
+                          "ids": {
+                            "chatList": {
+                              "data": {
+                                "modify": {
+                                  "delete": {
+                                    "uids": [
+                                      "{var:remove_chat}"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "script",
+                      "src": "scripts/load-chat-list",
+                      "args": "visibility"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "hidden": true
+}
