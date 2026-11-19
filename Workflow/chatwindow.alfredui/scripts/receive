@@ -3,6 +3,7 @@
 // Picks up text sent to the chat window from elsewhere (Universal Action, Hotkey or keyword).
 // The workflow leaves it in inbox.json, so it arrives whether the window was already open or not.
 // With a preset, a new chat is started and sent straight away. Without one, the text waits in the message box.
+// Files arrive the same way and become attachments.
 
 function envVar(varName) {
   return $.NSProcessInfo
@@ -47,10 +48,30 @@ function run() {
   let inbox
   try { inbox = JSON.parse(inboxString) } catch { return }
 
-  const text = (inbox.text || "").trim()
-  if (!text) return
+  // Files sent from elsewhere are imported the same way as ones attached in the window
+  const files = Array.isArray(inbox.files) ? inbox.files : []
+  const attached = files.length > 0
+    ? JSON.parse(runScript("attach", ["add", "[]", JSON.stringify(files)], true) || "{}")
+    : {}
+  const attachments = attached.variables?.attachments || []
+  const hasPreset = Boolean(inbox.preset?.prompt)
+
+  const text = (inbox.text || "").trim() || (attachments.length > 0 && hasPreset ? "See the attached files." : "")
+  if (!text && files.length === 0) return
 
   activateWindow()
+
+  // Files without a preset, or files that couldn't be attached: a new chat, ready for a question
+  if (files.length > 0 && (!hasPreset || attachments.length === 0)) return JSON.stringify({
+    ...attached,
+    variables: { ...attached.variables, current_chat_file: null },
+    update: { relayout: true, ids: {
+      ...attached.update?.ids,
+      chatArea: { behaviour: { mode: "replace" }, text: "" },
+      promptField: { text: "", focus: true }
+    }},
+    functions: { ids: { chatList: "selectnone" } }
+  })
 
   // No preset: start a new chat with the text ready to edit
   if (!inbox.preset?.prompt) return JSON.stringify({
@@ -64,11 +85,16 @@ function run() {
 
   // Preset: the same steps as pressing ↩ in a new chat
   const preset = JSON.stringify(inbox.preset)
-  const response = JSON.parse(runScript("prepare-for-streaming", ["", text, preset], true))
+  const attachmentsArg = JSON.stringify(attachments)
+  const response = JSON.parse(runScript("prepare-for-streaming", ["", text, preset, attachmentsArg], true))
   response.update.ids.chatArea.behaviour = { mode: "replace" }
   response.functions = { ids: { chatList: "selectfirst" } }
 
-  runScript("submit-prompt", [response.variables.current_chat_file, text, preset], false)
+  runScript("submit-prompt", [response.variables.current_chat_file, text, preset, "", "", attachmentsArg], false)
+
+  // The preset asks for its reply to be pasted back as soon as it arrives
+  if (inbox.preset.paste) $.NSFileManager.defaultManager.createFileAtPathContentsAttributes(
+    `${envVar("alfred_workflow_cache")}/autopaste`, undefined, undefined)
 
   return JSON.stringify(response)
 }

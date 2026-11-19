@@ -2,9 +2,11 @@
 
 const SYSTEM_PROMPT = [
   "You are Claude, chatting with the user in a small Mac chat window opened from Alfred.",
-  "Answer conversationally and use Markdown when it helps.",
-  "You have no tools, files or web access in this chat."
+  "Answer conversationally and use Markdown when it helps."
 ].join(" ")
+
+const NO_TOOLS = "You have no tools, files or web access in this chat."
+const READ_TOOLS = "Some files the user attached are too large to include in the message. Read them with your Read, Grep and Glob tools at the paths given. You have no other tools or web access."
 
 function envVar(varName) {
   return $.NSProcessInfo
@@ -62,17 +64,50 @@ function currentModel(cacheDir) {
 
 // With a preset, the instruction goes in front of the text. The chat shows the preset's name
 // above the text instead, and the chat list shows "Preset: text"
-function composeMessage(prompt, presetArg) {
+function parsePreset(presetArg) {
   let preset
   try { preset = JSON.parse(presetArg) } catch {}
   if (typeof preset === "string") try { preset = JSON.parse(preset) } catch {}
-  if (!preset?.prompt) return { content: prompt }
+  return preset?.prompt ? preset : undefined
+}
+
+function composeMessage(prompt, presetArg) {
+  const preset = parsePreset(presetArg)
+  if (!preset) return { content: prompt }
 
   const text = prompt.trim()
   return {
     content: `${preset.prompt}\n\n"""\n${text}\n"""`,
     title: `${preset.name}: ${text}`,
     display: `**${preset.name}**\n\n${text}`
+  }
+}
+
+// Attached files travel with the message. The chat shows their names above the text, and any images
+function withAttachments(message, attachmentsArg) {
+  let attachments
+  try { attachments = JSON.parse(attachmentsArg) } catch {}
+  if (typeof attachments === "string") try { attachments = JSON.parse(attachments) } catch {}
+  if (!Array.isArray(attachments) || attachments.length === 0) return message
+
+  // The chat area only draws an image that is on a line of its own, given as a plain path
+  const pictures = attachments
+    .filter(attachment => attachment.kind === "image")
+    .map(attachment => `![${attachment.name}](${attachment.thumbnail || attachment.path})\n\n`)
+    .join("")
+  // Names link to the files, so a click opens them
+  const fileLink = attachment => {
+    const url = $.NSURL.fileURLWithPath(attachment.link || attachment.path).absoluteString.js
+      .replace(/\(/g, "%28").replace(/\)/g, "%29")
+    // The chat area can't show square brackets inside a link's text
+    return `[${attachment.name.replace(/\[/g, "(").replace(/\]/g, ")")}](${url})`
+  }
+  const names = attachments.map(fileLink).join(", ")
+
+  return {
+    ...message,
+    attachments,
+    display: `${pictures}📎 ${names}\n\n${message.display || message.content}`
   }
 }
 
@@ -139,7 +174,38 @@ function findClaude() {
   return candidates.find(isExecutable) || claudeFromLoginShell()
 }
 
-function startStream({ claudePath, claudeError, modelId, sessionId, prompt, streamFile, pidStreamFile, workDir }) {
+// Attachments go to Claude Code as a structured message: one JSON line with the files, then the text.
+// Images and PDFs are sent as they are, text as text. Anything marked "ref" is too large for that,
+// so Claude gets its path and reads it with tools
+function messageWithAttachments(prompt, attachments) {
+  const imageTypes = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" }
+
+  const blocks = attachments.flatMap(({ path, name, kind, ref }) => {
+    if (!$.NSFileManager.defaultManager.fileExistsAtPath(path)) return [] // Since deleted: send the message without it
+
+    if (kind === "folder") return [{ type: "text", text: `<folder name="${name}" path="${path}">An unpacked archive. Look inside with your Glob, Grep and Read tools.</folder>` }]
+    if (ref) return [{ type: "text", text: `<file name="${name}" path="${path}">Too large to include here. Read or search it with your Read and Grep tools.</file>` }]
+
+    const data = $.NSData.dataWithContentsOfFile(path)
+    const base64 = () => data.base64EncodedStringWithOptions(0).js
+    const imageType = imageTypes[$(path).pathExtension.js.toLowerCase()]
+
+    if (kind === "image" && imageType) return [{ type: "image", source: { type: "base64", media_type: imageType, data: base64() } }]
+    if (kind === "pdf") return [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: base64() } }]
+
+    const text = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js
+    return text ? [{ type: "text", text: `<file name="${name}">\n${text}\n</file>` }] : []
+  })
+
+  if (blocks.length === 0) return undefined
+
+  return JSON.stringify({
+    type: "user",
+    message: { role: "user", content: blocks.concat({ type: "text", text: prompt }) }
+  }) + "\n"
+}
+
+function startStream({ claudePath, claudeError, modelId, sessionId, prompt, attachments, readDir, streamFile, pidStreamFile, workDir }) {
   const fileManager = $.NSFileManager.defaultManager
   fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(workDir, true, undefined, undefined)
   if (!fileManager.fileExistsAtPath(streamFile)) fileManager.createFileAtPathContentsAttributes(streamFile, undefined, undefined)
@@ -169,10 +235,21 @@ function startStream({ claudePath, claudeError, modelId, sessionId, prompt, stre
     "--output-format", "stream-json",
     "--verbose",
     "--include-partial-messages",
-    "--system-prompt", SYSTEM_PROMPT,
-    "--strict-mcp-config", // Don't start your MCP servers for every message
-    "--tools", ""          // No file or shell access. Remove this line if your Claude Code version rejects it
+    "--strict-mcp-config" // Don't start your MCP servers for every message
   ]
+
+  // No file or shell access, unless the chat has an attachment too large to send whole.
+  // Then Claude can read, and only read, the folder attachments are kept in
+  // Your own standing instructions, from the workflow configuration, go after the built-in ones
+  const customInstructions = (envVar("custom_instructions") || "").trim()
+  const systemPrompt = toolsNote => `${SYSTEM_PROMPT} ${toolsNote}`
+    + (customInstructions ? `\n\nThe user has set these standing instructions for every chat:\n\n${customInstructions}` : "")
+
+  if (readDir) args.push("--system-prompt", systemPrompt(READ_TOOLS), "--tools", "Read,Grep,Glob", "--add-dir", readDir)
+  else args.push("--system-prompt", systemPrompt(NO_TOOLS), "--tools", "")
+
+  const structuredInput = messageWithAttachments(prompt, attachments || [])
+  if (structuredInput) args.push("--input-format", "stream-json")
   if (modelId) args.push("--model", modelId)
   if (sessionId) args.push("--resume", sessionId)
 
@@ -200,7 +277,7 @@ function startStream({ claudePath, claudeError, modelId, sessionId, prompt, stre
 
   // Prompt goes in through stdin so long text, or text starting with "-", is never read as a flag
   const writer = input.fileHandleForWriting
-  writer.writeData($(prompt).dataUsingEncoding($.NSUTF8StringEncoding))
+  writer.writeData($(structuredInput || prompt).dataUsingEncoding($.NSUTF8StringEncoding))
   writer.closeFile
 }
 
@@ -221,26 +298,34 @@ function run(argv) {
     ? `Couldn't find Claude Code at \`${configuredPath}\`. Fix Claude Path in the workflow configuration, or clear it to search the usual install locations.`
     : "Couldn't find Claude Code in the usual install locations. Run `which claude` in Terminal and paste the result into Claude Path in the workflow configuration."
 
+  const presetModel = parsePreset(argv[2])?.model
+
   const previousChat = readChat(chatFile)
   // Regenerating passes the original message to send again as it was,
   // and the session that held the old reply, which mustn't be continued
-  const message = argv[3] ? JSON.parse(argv[3]) : composeMessage(prompt, argv[2])
+  const message = argv[3] ? JSON.parse(argv[3]) : withAttachments(composeMessage(prompt, argv[2]), argv[5])
   const ongoingChat = previousChat.concat({ role: "user", ...message })
   const resumable = resumableSession(previousChat)
   const sessionId = resumable && resumable !== argv[4] ? resumable : undefined
 
-  const claudePrompt = sessionId
-    ? message.content
-    : transcriptPrompt(ongoingChat.filter(m => m.role === "user" || m.role === "assistant").slice(-maxContext))
+  // A resumed session already has earlier attachments. Without one, resend those in the history too
+  const recentChat = ongoingChat.filter(m => m.role === "user" || m.role === "assistant").slice(-maxContext)
+  const claudePrompt = sessionId ? message.content : transcriptPrompt(recentChat)
+  const attachments = (sessionId ? [message] : recentChat).flatMap(m => m.attachments || [])
 
   writeFile(chatFile, JSON.stringify(ongoingChat))
 
   startStream({
     claudePath,
     claudeError,
-    modelId: currentModel(cacheDir),
+    // A preset can name its own model. "default" means Claude Code's own choice, the same as in the dropdown
+    modelId: presetModel ? (presetModel === "default" ? "" : presetModel) : currentModel(cacheDir),
     sessionId,
     prompt: claudePrompt,
+    attachments,
+    readDir: ongoingChat.some(m => (m.attachments || []).some(attachment => attachment.ref))
+      ? `${envVar("alfred_workflow_data")}/attachments`
+      : undefined,
     streamFile: `${cacheDir}/stream.txt`,
     pidStreamFile: `${cacheDir}/pid.txt`,
     workDir: cacheDir

@@ -1,6 +1,6 @@
 #!/usr/bin/osascript -l JavaScript
 
-// Send every chat to the Trash, leaving the presets alone
+// Send every chat and its attachments to the Trash, leaving the presets alone
 
 function run() {
   const fileManager = $.NSFileManager.defaultManager
@@ -8,7 +8,7 @@ function run() {
   const files = ObjC.deepUnwrap(fileManager.contentsOfDirectoryAtPathError(dataDir, undefined)) || []
 
   files
-    .filter(file => file.endsWith(".json"))
+    .filter(file => file.endsWith(".json") || file === "attachments")
     .forEach(file => fileManager.trashItemAtURLResultingItemURLError(
       $.NSURL.fileURLWithPath(`${dataDir}/${file}`), undefined, undefined))
 }

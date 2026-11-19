@@ -23,10 +23,38 @@ function composeMessage(prompt, presetArg) {
   }
 }
 
+// Attached files travel with the message. The chat shows their names above the text, and any images
+function withAttachments(message, attachmentsArg) {
+  let attachments
+  try { attachments = JSON.parse(attachmentsArg) } catch {}
+  if (typeof attachments === "string") try { attachments = JSON.parse(attachments) } catch {}
+  if (!Array.isArray(attachments) || attachments.length === 0) return message
+
+  // The chat area only draws an image that is on a line of its own, given as a plain path
+  const pictures = attachments
+    .filter(attachment => attachment.kind === "image")
+    .map(attachment => `![${attachment.name}](${attachment.thumbnail || attachment.path})\n\n`)
+    .join("")
+  // Names link to the files, so a click opens them
+  const fileLink = attachment => {
+    const url = $.NSURL.fileURLWithPath(attachment.link || attachment.path).absoluteString.js
+      .replace(/\(/g, "%28").replace(/\)/g, "%29")
+    // The chat area can't show square brackets inside a link's text
+    return `[${attachment.name.replace(/\[/g, "(").replace(/\]/g, ")")}](${url})`
+  }
+  const names = attachments.map(fileLink).join(", ")
+
+  return {
+    ...message,
+    attachments,
+    display: `${pictures}📎 ${names}\n\n${message.display || message.content}`
+  }
+}
+
 function run(argv) {
   const chatFile = argv[0]
   const prompt = argv[1]
-  const message = composeMessage(prompt, argv[2])
+  const message = withAttachments(composeMessage(prompt, argv[2]), argv[3])
 
   if (prompt.trim().length === 0) return JSON.stringify({ sound: { src: "Basso" }})
 
@@ -56,6 +84,9 @@ function run(argv) {
       deleteAllButton: { enabled: false },
       presetsButton: { enabled: false },
       regenerateButton: { enabled: false },
+      pasteReplyButton: { enabled: false },
+      attachButton: { enabled: false },
+      attachmentsButton: { text: "", hidden: true },
       chatList: { enabled: false },
       promptField: { enabled: false }
     }}

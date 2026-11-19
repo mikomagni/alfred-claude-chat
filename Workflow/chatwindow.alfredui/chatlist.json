@@ -139,7 +139,7 @@
                   "action": [
                     {
                       "type": "script",
-                      "src": "/usr/bin/trash",
+                      "src": "scripts/delete-chat",
                       "args": "{data:uid}"
                     },
                     {
@@ -208,7 +208,7 @@
           "action": [
             {
               "type": "script",
-              "src": "/usr/bin/trash",
+              "src": "scripts/delete-chat",
               "args": "{data:uid}"
             },
             {

@@ -31,10 +31,11 @@ function run(argv) {
   fileManager.removeItemAtPathError(pidStreamFile, undefined)
   fileManager.removeItemAtPathError(streamFile, undefined)
   fileManager.removeItemAtPathError(`${envVar("alfred_workflow_cache")}/starting`, undefined)
+  fileManager.removeItemAtPathError(`${envVar("alfred_workflow_cache")}/autopaste`, undefined)
 
   return JSON.stringify({
     pulse: { interval: 0.5 },
-    variables: { stop_streaming: false, preset: "" },
+    variables: { stop_streaming: false, preset: "", attachments: "" },
     update: { relayout: true, ids: {
       chatArea: chatAreaObj,
       submitPromptButton: {
@@ -45,6 +46,9 @@ function run(argv) {
       deleteAllButton: { enabled: true },
       presetsButton: { enabled: true, text: "Presets" },
       regenerateButton: { enabled: true },
+      pasteReplyButton: { enabled: true },
+      attachButton: { enabled: true },
+      attachmentsButton: { text: "", hidden: true },
       chatList: { enabled: true },
       promptField: { enabled: true, focus: true, text: "" }
     }}

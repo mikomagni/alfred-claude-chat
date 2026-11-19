@@ -1,0 +1,458 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Attach files to the next message. The first argument after the mode is always the
+// current list of attachments, as JSON.
+//
+//   add <list> <paths>       Add files. <paths> is one path or a JSON array of paths
+//   clipboard <list>         Add what is on the clipboard: copied files, an image such as a screenshot, or text
+//   remove <list> <path>     Drop one attachment
+//   clear <list>             Drop them all
+//   menu <list>              Show the attachments, to remove them
+//
+// How a file reaches Claude depends on its kind:
+//   image    sent as an image (odd formats are converted to PNG, large ones scaled down)
+//   pdf      sent as a PDF. Pages, Numbers and Keynote files are sent as their built-in PDF preview
+//   text     sent as text. Word, RTF and web documents, Excel sheets and PowerPoint slides are converted first
+//   folder   an unpacked zip archive
+// Text over 200 KB and folders are too big to send whole, so they are marked "ref":
+// Claude is told where they are and reads them with its read-only tools.
+//
+// Every attachment is copied into its own folder in the workflow's data folder,
+// so the chat can still use it later.
+
+ObjC.import("AppKit")
+
+const MAX_ATTACHMENTS = 10
+const MAX_IMAGE_SIDE = 1568            // Larger images are scaled down by Claude anyway
+const THUMBNAIL_SIDE = 640             // Pixels. Shown in the chat at half this, 320 points
+const MAX_PDF_BYTES = 20 * 1024 * 1024
+const MAX_INLINE_TEXT_BYTES = 200 * 1024
+const MAX_TEXT_BYTES = 50 * 1024 * 1024
+const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
+const MAX_ARCHIVE_FILES = 2000
+
+const SENDABLE_IMAGES = ["png", "jpg", "jpeg", "gif", "webp"]
+const OTHER_IMAGES = ["heic", "heif", "tiff", "tif", "bmp", "icns"]
+const TEXTUTIL_DOCUMENTS = ["doc", "docx", "rtf", "rtfd", "odt", "html", "htm", "webarchive"]
+const IWORK_DOCUMENTS = ["pages", "numbers", "key"]
+
+const fileManager = $.NSFileManager.defaultManager
+
+// Helpers
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+// Runs a command line tool. Returns its output as a string, or undefined if it failed.
+// With an output path, the output goes to that file instead
+function runTool(executable, args, outputPath) {
+  const task = $.NSTask.alloc.init
+  const stdout = $.NSPipe.pipe
+
+  if (outputPath) fileManager.createFileAtPathContentsAttributes(outputPath, undefined, undefined)
+
+  task.executableURL = $.NSURL.fileURLWithPath(executable)
+  task.arguments = args
+  task.standardOutput = outputPath ? $.NSFileHandle.fileHandleForWritingAtPath(outputPath) : stdout
+  task.standardError = $.NSFileHandle.fileHandleWithNullDevice
+  if (!task.launchAndReturnError(false)) return undefined
+
+  const data = outputPath ? undefined : stdout.fileHandleForReading.readDataToEndOfFileAndReturnError(false)
+  task.waitUntilExit
+  if (task.terminationStatus !== 0) return undefined
+
+  return outputPath ? "" : ($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js ?? "")
+}
+
+function fileSize(path) {
+  return fileManager.attributesOfItemAtPathError(path, undefined).js?.NSFileSize?.js ?? Infinity
+}
+
+function isDirectory(path) {
+  const directory = Ref()
+  return fileManager.fileExistsAtPathIsDirectory(path, directory) && directory[0]
+}
+
+function readText(path) {
+  return $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
+}
+
+function writeText(path, text) {
+  return $(text).writeToFileAtomicallyEncodingError(path, true, $.NSUTF8StringEncoding, undefined)
+}
+
+// Each attachment gets its own folder, so the file keeps its name
+function destinationFor(name) {
+  const folder = `${envVar("alfred_workflow_data")}/attachments/${$.NSUUID.UUID.UUIDString.js}`
+  fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(folder, true, undefined, undefined)
+  return `${folder}/${name}`
+}
+
+function discard(path) {
+  const attachmentsDir = `${envVar("alfred_workflow_data")}/attachments/`
+  const relative = path.startsWith(attachmentsDir) ? path.slice(attachmentsDir.length) : ""
+  const folder = relative.split("/")[0]
+  if (folder) fileManager.removeItemAtPathError(attachmentsDir + folder, undefined)
+}
+
+function decodeXml(text) {
+  return text
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, decimal) => String.fromCodePoint(parseInt(decimal)))
+    .replace(/&amp;/g, "&")
+}
+
+function xmlAttributes(tag) {
+  return Object.fromEntries([...tag.matchAll(/([\w:]+)="([^"]*)"/g)].map(match => [match[1], decodeXml(match[2])]))
+}
+
+// Converters. Office files are zip archives of XML, read here with unzip
+
+function unzipEntry(archive, entry) {
+  return runTool("/usr/bin/unzip", ["-p", archive, entry])
+}
+
+// Every sheet as comma-separated values. Formulas give their last calculated value
+function excelToText(source) {
+  const workbook = unzipEntry(source, "xl/workbook.xml")
+  const relationships = unzipEntry(source, "xl/_rels/workbook.xml.rels")
+  if (!workbook || !relationships) return undefined
+
+  const sharedStrings = [...(unzipEntry(source, "xl/sharedStrings.xml") || "").matchAll(/<si>([\s\S]*?)<\/si>|<si\/>/g)]
+    .map(item => [...(item[1] || "").matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map(text => decodeXml(text[1])).join(""))
+
+  const targets = Object.fromEntries([...relationships.matchAll(/<Relationship\b[^>]*>/g)]
+    .map(tag => xmlAttributes(tag[0]))
+    .map(attributes => [attributes.Id, attributes.Target]))
+
+  const columnIndex = reference => [...reference.replace(/\d/g, "")]
+    .reduce((index, letter) => index * 26 + letter.charCodeAt(0) - 64, 0) - 1
+
+  const csvCell = value => /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+
+  const sheets = [...workbook.matchAll(/<sheet\b[^>]*>/g)].map(tag => xmlAttributes(tag[0])).flatMap(sheet => {
+    const target = targets[sheet["r:id"]]
+    const xml = target && unzipEntry(source, target.startsWith("/") ? target.slice(1) : `xl/${target}`)
+    if (!xml) return []
+
+    const rows = [...xml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)].map(row => {
+      const cells = []
+
+      for (const cell of row[1].matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+        const attributes = xmlAttributes(cell[1])
+        const body = cell[2] || ""
+        const raw = body.match(/<v>([\s\S]*?)<\/v>/)?.[1] ?? ""
+        const inline = [...body.matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map(text => text[1]).join("")
+
+        const value = attributes.t === "s" ? (sharedStrings[parseInt(raw)] ?? "")
+          : attributes.t === "inlineStr" ? decodeXml(inline)
+          : attributes.t === "b" ? (raw === "1" ? "TRUE" : "FALSE")
+          : decodeXml(raw)
+
+        cells[attributes.r ? columnIndex(attributes.r) : cells.length] = value
+      }
+
+      return Array.from(cells, value => csvCell(value ?? "")).join(",")
+    })
+
+    return [`Sheet: ${sheet.name}\n${rows.join("\n")}`]
+  })
+
+  return sheets.length > 0 ? sheets.join("\n\n") : undefined
+}
+
+// The text of every slide, in order
+function powerpointToText(source) {
+  const entries = (runTool("/usr/bin/unzip", ["-Z1", source]) || "").split("\n")
+  const slideNumber = entry => parseInt(entry.match(/^ppt\/slides\/slide(\d+)\.xml$/)?.[1])
+
+  const slides = entries
+    .filter(entry => slideNumber(entry))
+    .sort((a, b) => slideNumber(a) - slideNumber(b))
+    .map(entry => {
+      const paragraphs = [...(unzipEntry(source, entry) || "").matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
+        .map(paragraph => [...paragraph[1].matchAll(/<a:t\b[^>]*>([\s\S]*?)<\/a:t>/g)].map(text => decodeXml(text[1])).join(""))
+        .filter(paragraph => paragraph.trim())
+
+      return `Slide ${slideNumber(entry)}\n${paragraphs.join("\n")}`
+    })
+
+  return slides.length > 0 ? slides.join("\n\n") : undefined
+}
+
+// Importing. Each returns { path, name, kind, ref? } or { error }
+
+function importImage(source, name, extension) {
+  const keepFormat = SENDABLE_IMAGES.includes(extension)
+  const path = destinationFor(keepFormat ? name : `${$(name).stringByDeletingPathExtension.js}.png`)
+  const imported = keepFormat
+    ? fileManager.copyItemAtPathToPathError(source, path, undefined)
+    : runTool("/usr/bin/sips", ["-s", "format", "png", source, "--out", path]) !== undefined
+
+  const image = imported ? $.NSImage.alloc.initWithContentsOfFile(path) : $()
+  if (image.isNil() || image.representations.count === 0) {
+    discard(path)
+    return { error: `${name} couldn't be read as an image.` }
+  }
+
+  const rep = image.representations.objectAtIndex(0)
+  if (Math.max(rep.pixelsWide, rep.pixelsHigh) > MAX_IMAGE_SIDE) runTool("/usr/bin/sips", ["-Z", String(MAX_IMAGE_SIDE), path])
+
+  // A small copy to show in the chat
+  const thumbnail = `${$(path).stringByDeletingLastPathComponent.js}/thumbnail.png`
+  const hasThumbnail = runTool("/usr/bin/sips", [
+    "-s", "format", "png", "-Z", String(THUMBNAIL_SIDE),
+    // The chat draws an image at the size its resolution implies, so every thumbnail gets the same one.
+    // Otherwise a 300 dpi photo shows a quarter the size of a 72 dpi one
+    "-s", "dpiWidth", "144", "-s", "dpiHeight", "144",
+    path, "--out", thumbnail]) !== undefined
+  return hasThumbnail ? { path, name, kind: "image", thumbnail } : { path, name, kind: "image" }
+}
+
+function importPdf(source, name) {
+  if (fileSize(source) > MAX_PDF_BYTES) return { error: `${name} is larger than 20 MB, the most a PDF can be.` }
+
+  const path = destinationFor(name)
+  if (fileManager.copyItemAtPathToPathError(source, path, undefined)) return { path, name, kind: "pdf" }
+
+  discard(path)
+  return { error: `${name} couldn't be copied.` }
+}
+
+// Pages, Numbers and Keynote files carry a PDF preview of themselves
+function importIWork(source, name) {
+  const path = destinationFor(`${$(name).stringByDeletingPathExtension.js}.pdf`)
+  const extracted = isDirectory(source)
+    ? fileManager.copyItemAtPathToPathError(`${source}/QuickLook/Preview.pdf`, path, undefined)
+    : runTool("/usr/bin/unzip", ["-p", source, "QuickLook/Preview.pdf"], path) !== undefined
+
+  const isPdf = extracted && fileSize(path) > 4 && fileSize(path) <= MAX_PDF_BYTES
+  if (isPdf) return { path, name, kind: "pdf" }
+
+  discard(path)
+  return { error: `${name} has no preview inside to send. Export it as a PDF and attach that.` }
+}
+
+function importArchive(source, name) {
+  const listing = runTool("/usr/bin/unzip", ["-l", source])
+  const [, totalBytes, totalFiles] = listing?.trim().split("\n").pop().match(/^\s*(\d+)\s+(\d+) files?/) || []
+  if (!listing || totalBytes === undefined) return { error: `${name} couldn't be opened as a zip archive.` }
+  if (parseInt(totalBytes) > MAX_ARCHIVE_BYTES || parseInt(totalFiles) > MAX_ARCHIVE_FILES)
+    return { error: `${name} unpacks to more than 50 MB or 2000 files, which is too much to attach.` }
+
+  const path = destinationFor($(name).stringByDeletingPathExtension.js)
+  if (runTool("/usr/bin/ditto", ["-x", "-k", source, path]) !== undefined) return { path, name, kind: "folder", ref: true }
+
+  discard(path)
+  return { error: `${name} couldn't be unpacked.` }
+}
+
+// Text, either the file as it is or the result of a conversion
+function importText(name, storedName, write) {
+  const path = destinationFor(storedName)
+  const written = write(path)
+  const size = written ? fileSize(path) : Infinity
+
+  if (!written || size === 0 || size > MAX_TEXT_BYTES || readText(path) === undefined) {
+    discard(path)
+    return { error: size > MAX_TEXT_BYTES && size !== Infinity
+      ? `${name} is larger than 50 MB.`
+      : `${name} isn't a kind of file Claude can read.` }
+  }
+
+  return size > MAX_INLINE_TEXT_BYTES ? { path, name, kind: "text", ref: true } : { path, name, kind: "text" }
+}
+
+// The file a click on the attachment's name in the chat opens: the stored copy, or the original
+// when the stored copy is a conversion of it, such as the text of a Word document
+function importFile(source, name) {
+  const imported = importAs(source, name || $(source).lastPathComponent.js)
+  if (imported.error) return imported
+
+  const converted = $(imported.path).pathExtension.js.toLowerCase() !== $(source).pathExtension.js.toLowerCase()
+  return { ...imported, link: converted && !name ? source : imported.path }
+}
+
+function importAs(source, name) {
+  const extension = $(source).pathExtension.js.toLowerCase()
+  const textName = `${$(name).stringByDeletingPathExtension.js}.txt`
+
+  if (!fileManager.fileExistsAtPath(source)) return { error: `${name} couldn't be found.` }
+
+  if (IWORK_DOCUMENTS.includes(extension)) return importIWork(source, name)
+  if (TEXTUTIL_DOCUMENTS.includes(extension))
+    return importText(name, textName, path => runTool("/usr/bin/textutil", ["-convert", "txt", "-output", path, source]) !== undefined)
+
+  if (isDirectory(source)) return { error: `${name} is a folder. Compress it in Finder and attach the zip.` }
+
+  if (SENDABLE_IMAGES.includes(extension) || OTHER_IMAGES.includes(extension)) return importImage(source, name, extension)
+  if (extension === "pdf") return importPdf(source, name)
+  if (extension === "zip") return importArchive(source, name)
+
+  if (extension === "xlsx" || extension === "xlsm")
+    return importText(name, textName, path => { const text = excelToText(source); return text !== undefined && writeText(path, text) })
+  if (extension === "pptx")
+    return importText(name, textName, path => { const text = powerpointToText(source); return text !== undefined && writeText(path, text) })
+
+  return importText(name, name, path => fileSize(source) <= MAX_TEXT_BYTES && fileManager.copyItemAtPathToPathError(source, path, undefined))
+}
+
+function importClipboard(pasteboard = $.NSPasteboard.generalPasteboard) {
+  // Files copied in Finder
+  const items = ObjC.unwrap(pasteboard.pasteboardItems) || []
+  const filePaths = items
+    .map(item => item.stringForType("public.file-url").js)
+    .filter(Boolean)
+    .map(url => $.NSURL.URLWithString(url).path.js)
+  if (filePaths.length > 0) return filePaths.map(path => importFile(path))
+
+  const temporary = extension => `${$.NSTemporaryDirectory().js}/${$.NSUUID.UUID.UUIDString.js}.${extension}`
+  const importTemporary = (path, name) => {
+    const imported = importFile(path, name)
+    fileManager.removeItemAtPathError(path, undefined)
+    return [imported]
+  }
+
+  // Image data, such as a screenshot
+  const image = $.NSImage.alloc.initWithPasteboard(pasteboard)
+  if (!image.isNil()) {
+    const bitmap = $.NSBitmapImageRep.imageRepWithData(image.TIFFRepresentation)
+    const png = bitmap.representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $())
+    const path = temporary("png")
+    if (png.writeToFileAtomically(path, true)) return importTemporary(path, "Pasted image.png")
+  }
+
+  // Text: handy for something long that would swamp the message box
+  const text = pasteboard.stringForType("public.utf8-plain-text").js
+  if (text?.trim()) {
+    const path = temporary("txt")
+    if (writeText(path, text)) return importTemporary(path, "Pasted text.txt")
+  }
+
+  return [{ error: "There is nothing on the clipboard to attach." }]
+}
+
+// Responses
+
+function parseList(listArg) {
+  try {
+    const list = JSON.parse(listArg)
+    return Array.isArray(list) ? list : []
+  } catch { return [] }
+}
+
+function parsePaths(pathsArg) {
+  try {
+    const paths = JSON.parse(pathsArg)
+    if (Array.isArray(paths)) return paths
+  } catch {}
+  return pathsArg ? [pathsArg] : []
+}
+
+function buttonLabel(list) {
+  if (list.length === 0) return ""
+  if (list.length > 1) return `${list.length} files`
+
+  const name = list[0].name
+  return name.length > 24 ? `${name.slice(0, 12)}…${name.slice(-10)}` : name
+}
+
+function listUpdate(list) {
+  return {
+    variables: { attachments: list },
+    update: { relayout: true, ids: {
+      attachmentsButton: { text: buttonLabel(list), hidden: list.length === 0 },
+      promptField: { focus: true }
+    }}
+  }
+}
+
+function errorSheet(errors) {
+  const lines = errors.reduce((total, error) => total + Math.ceil(error.length / 48) + 1, 0)
+
+  return {
+    id: "attachError",
+    root: {
+      constraints: { size: { width: 400, height: 110 + lines * 18 } },
+      type: "view",
+      layout: "border",
+      padding: 20,
+      spacing: 10,
+      components: [
+        {
+          constraints: { region: "top" },
+          type: "label",
+          text: "Couldn't attach",
+          font: { weight: "bold" }
+        },
+        {
+          constraints: { region: "centre", position: "top", stretch: "horizontal" },
+          type: "label",
+          text: errors.join("\n\n"),
+          linebreak: "wordwrap"
+        },
+        {
+          constraints: { region: "bottom", position: "right" },
+          type: "button",
+          text: "OK",
+          shortcut: "↩",
+          events: [{ triggers: "actioned", action: { type: "json", src: { sheet: { close: "attachError" } } } }]
+        }
+      ]
+    }
+  }
+}
+
+function addResponse(list, imported) {
+  const added = imported.filter(item => !item.error)
+  const errors = imported.filter(item => item.error).map(item => item.error)
+
+  const room = MAX_ATTACHMENTS - list.length
+  added.slice(Math.max(room, 0)).forEach(item => discard(item.path))
+  if (added.length > room) errors.push(`A message can carry up to ${MAX_ATTACHMENTS} files.`)
+
+  const response = listUpdate(list.concat(added.slice(0, Math.max(room, 0))))
+  if (errors.length > 0) response.sheet = errorSheet(errors)
+  return response
+}
+
+function menu(list) {
+  const removeAction = args => ({ type: "script", src: "scripts/attach", args })
+
+  const items = list.map(attachment => ({
+    text: `Remove ${attachment.name}`,
+    action: removeAction(["remove", "{var:attachments}", attachment.path])
+  }))
+
+  const all = list.length > 1
+    ? [{ type: "separator" }, { text: "Remove All", action: removeAction(["clear", "{var:attachments}"]) }]
+    : []
+
+  return { popupmenu: { src: "attachmentsButton", menu: items.concat(all) } }
+}
+
+function run(argv) {
+  const [mode, listArg, target] = argv
+  const list = parseList(listArg)
+
+  const response = {
+    add: () => addResponse(list, parsePaths(target).map(path => importFile(path))),
+    clipboard: () => addResponse(list, importClipboard()),
+    remove: () => {
+      discard(target)
+      return listUpdate(list.filter(attachment => attachment.path !== target))
+    },
+    clear: () => {
+      list.forEach(attachment => discard(attachment.path))
+      return listUpdate([])
+    },
+    menu: () => menu(list)
+  }[mode]?.()
+
+  if (response) return JSON.stringify(response)
+}

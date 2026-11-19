@@ -22,15 +22,19 @@ function appendChat(path, message) {
 }
 
 function endStreaming(chatAreaObj) {
-  const endStreamingScript = $.NSFileManager.defaultManager
+  return runScript("end-streaming", [ JSON.stringify(chatAreaObj) ])
+}
+
+function runScript(name, args) {
+  const scriptPath = $.NSFileManager.defaultManager
     .currentDirectoryPath
-    .stringByAppendingPathComponent("scripts/end-streaming").js
+    .stringByAppendingPathComponent(`scripts/${name}`).js
 
   const task = $.NSTask.alloc.init
   const stdout = $.NSPipe.pipe
 
-  task.executableURL = $.NSURL.fileURLWithPath(endStreamingScript)
-  task.arguments = [ JSON.stringify(chatAreaObj) ]
+  task.executableURL = $.NSURL.fileURLWithPath(scriptPath)
+  task.arguments = args
   task.standardOutput = stdout
   task.launchAndReturnError(false)
 
@@ -74,6 +78,10 @@ function run(argv) {
     .map(item => item.event.delta.text)
     .join("")
 
+  const readingFiles = events.some(item => item.type === "stream_event"
+    && item.event?.type === "content_block_start"
+    && item.event.content_block?.type === "tool_use")
+
   const result = events.find(item => item.type === "result")
 
   // Still streaming
@@ -105,7 +113,7 @@ function run(argv) {
     // Claude Code has started but hasn't written anything yet
     return JSON.stringify({ update: { ids: { chatArea: {
       behaviour: { mode: "replacelast", scroll: "end" },
-      text: responseText || "*Thinking…*"
+      text: responseText || (readingFiles ? "*Reading the attached files…*" : "*Thinking…*")
     }}}})
   }
 
@@ -121,8 +129,18 @@ function run(argv) {
   const finalText = typeof result.result === "string" && result.result.length > 0 ? result.result : responseText
   appendChat(chatFile, assistantMessage(finalText))
 
-  return endStreaming({
+  // Sent with a preset that pastes its reply back: do that now, which also closes the window
+  const autoPaste = $.NSFileManager.defaultManager.fileExistsAtPath(`${envVar("alfred_workflow_cache")}/autopaste`)
+
+  const ended = endStreaming({
     behaviour: { mode: "replacelast", scroll: "end" },
     text: finalText
   })
+
+  if (autoPaste) {
+    const pasted = runScript("paste-reply", [chatFile])
+    if (pasted.includes('"finish"')) return pasted
+  }
+
+  return ended
 }

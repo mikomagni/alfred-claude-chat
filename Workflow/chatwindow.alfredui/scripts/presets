@@ -9,6 +9,7 @@
 //   edit                       Open the editor sheet
 //   load <id>                  Show a preset in the editor
 //   save <id> <name> <prompt> [refresh]
+//   option <id> model|paste <value>   Change one of a preset's options
 //   add | delete <id> | move <id> up|down
 
 const DEFAULTS = [
@@ -54,13 +55,32 @@ function usable(presets) {
   return presets.filter(preset => preset.name.trim() && preset.prompt.trim())
 }
 
+// What travels with a message when a preset is used.
+//   model   the model to answer with, or nothing to use the one chosen in the chat window
+//   paste   paste the reply back as soon as it arrives (only when sent with Ask Claude)
+function presetToSend(preset) {
+  return { name: preset.name, prompt: preset.prompt, model: preset.model || "", paste: Boolean(preset.paste) }
+}
+
+// The same models as the chat window's dropdown
+const MODELS = [
+  ["Same as the chat", "chat"],
+  ["Sonnet", "sonnet"], ["Opus", "opus"], ["Haiku", "haiku"],
+  ["Fable", "fable"], ["Best available", "best"], ["Opus (1M context)", "opus[1m]"],
+  ["Opus 5", "claude-opus-5"], ["Sonnet 5", "claude-sonnet-5"], ["Opus 4.8", "claude-opus-4-8"], ["Fable 5", "claude-fable-5"]
+]
+
+function modelName(model) {
+  return MODELS.find(([, value]) => value === model)?.[0]
+}
+
 // Chat window menu
 
 // Choosing a preset selects it for the next message: the button shows its name until that message is sent
 function selectAction(preset) {
   return {
     type: "json",
-    variables: { preset: preset ? { name: preset.name, prompt: preset.prompt } : "" },
+    variables: { preset: preset ? presetToSend(preset) : "" },
     // relayout: the button has to resize to fit the new name
     src: { update: { relayout: true, ids: {
       presetsButton: { text: preset ? preset.name : "Presets" },
@@ -89,9 +109,21 @@ function menu(currentArg) {
 
 // List in Alfred
 
+// Files chosen in Finder or Alfred arrive as paths, separated by tabs or new lines.
+// Returns them, or nothing if the input is ordinary text
+function filePaths(input) {
+  const paths = input.split(/[\t\n]/).map(path => path.trim()).filter(Boolean)
+  const allFiles = paths.length > 0
+    && paths.every(path => path.startsWith("/") && $.NSFileManager.defaultManager.fileExistsAtPath(path))
+  return allFiles ? paths : []
+}
+
 function filter() {
   const text = envVar("selected_text") || ""
-  const preview = text.trim().replace(/\s+/g, " ").slice(0, 80)
+  const files = filePaths(text)
+  const preview = files.length > 0
+    ? files.map(path => $(path).lastPathComponent.js).join(", ").slice(0, 80)
+    : text.trim().replace(/\s+/g, " ").slice(0, 80)
 
   const askItem = {
     title: "Ask Claude",
@@ -100,27 +132,34 @@ function filter() {
     variables: { preset: "" }
   }
 
-  const presetItems = usable(readPresets()).map(preset => ({
-    title: preset.name,
-    subtitle: preset.prompt,
-    arg: preset.name,
-    variables: { preset: JSON.stringify({ name: preset.name, prompt: preset.prompt }) }
-  }))
+  const presetItems = usable(readPresets()).map(preset => {
+    const options = [preset.paste && "Pastes the reply back", preset.model && modelName(preset.model)].filter(Boolean)
+
+    return {
+      title: preset.name,
+      subtitle: options.length > 0 ? `${options.join(" · ")} · ${preset.prompt}` : preset.prompt,
+      arg: preset.name,
+      variables: { preset: JSON.stringify(presetToSend(preset)) }
+    }
+  })
 
   return { items: [askItem].concat(presetItems) }
 }
 
 // The chat window checks for this file when it opens and while it is open
 function inbox() {
-  const text = envVar("selected_text") || ""
-  if (!text.trim()) return
+  const input = envVar("selected_text") || ""
+  if (!input.trim()) return
 
   let preset = null
   try { preset = JSON.parse(envVar("preset")) } catch {}
 
+  const files = filePaths(input)
+  const text = files.length > 0 ? "" : input
+
   const cacheDir = envVar("alfred_workflow_cache")
   $.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(cacheDir, true, undefined, undefined)
-  $(JSON.stringify({ text, preset })).writeToFileAtomicallyEncodingError(`${cacheDir}/inbox.json`, true, $.NSUTF8StringEncoding, undefined)
+  $(JSON.stringify({ text, files, preset })).writeToFileAtomicallyEncodingError(`${cacheDir}/inbox.json`, true, $.NSUTF8StringEncoding, undefined)
 }
 
 // Editor
@@ -134,7 +173,9 @@ function listData(presets, selectId) {
 function fieldUpdates(preset) {
   return {
     presetName: { text: preset?.name || "", enabled: Boolean(preset) },
-    presetPrompt: { text: preset?.prompt || "", editable: Boolean(preset) }
+    presetPrompt: { text: preset?.prompt || "", editable: Boolean(preset) },
+    presetModel: { selected: preset?.model || "chat", enabled: Boolean(preset) },
+    presetPaste: { checked: Boolean(preset?.paste), enabled: Boolean(preset) }
   }
 }
 
@@ -172,7 +213,7 @@ function editorSheet() {
   return { sheet: {
     id: "presetsSheet",
     root: {
-      constraints: { size: { width: 680, height: 440 } },
+      constraints: { size: { width: 700, height: 480 } },
       type: "view",
       layout: "border",
       padding: 16,
@@ -262,6 +303,43 @@ function editorSheet() {
               textinsets: { horizontal: 6, vertical: 6 },
               autoadjustcontentinsets: false,
               events: [{ triggers: "typingstopped", action: scriptAction(SAVE_ARGS) }]
+            },
+            {
+              // Options, lined up with the left edge of the fields above
+              constraints: { region: "bottom" },
+              type: "view",
+              layout: "border",
+              spacing: 8,
+              components: [
+                {
+                  constraints: { region: "top" },
+                  type: "view",
+                  layout: "border",
+                  spacing: 8,
+                  components: [
+                    { constraints: { region: "left", position: "centre" }, type: "label", text: "Model" },
+                    {
+                      constraints: { region: "centre", position: "left" },
+                      id: "presetModel",
+                      type: "picker",
+                      items: MODELS.map(([text, value]) => ({ text, value })),
+                      selected: first?.model || "chat",
+                      enabled: Boolean(first),
+                      // These save one option only: setting them when another preset is shown can also fire "changed"
+                      events: [{ triggers: "changed", action: scriptAction(["option", SELECTED, "model", "{value:self.selected.value}"]) }]
+                    }
+                  ]
+                },
+                {
+                  constraints: { region: "centre", position: "left" },
+                  id: "presetPaste",
+                  type: "checkbox",
+                  text: "Paste the reply back automatically when sent with Ask Claude",
+                  checked: Boolean(first?.paste),
+                  enabled: Boolean(first),
+                  events: [{ triggers: "changed", action: scriptAction(["option", SELECTED, "paste", "{value:self.checked}"]) }]
+                }
+              ]
             }
           ]
         },
@@ -294,6 +372,16 @@ function save(id, name, prompt, refresh) {
 
   // Only redraw the list when asked: redrawing while you type would move the cursor
   if (refresh) return { update: { ids: { presetList: { data: listData(presets, id) } } } }
+}
+
+function setOption(id, option, value) {
+  const presets = readPresets()
+  const preset = presets.find(preset => preset.id === id)
+  if (!preset) return
+
+  if (option === "model") preset.model = value === "chat" ? "" : (value || "")
+  if (option === "paste") preset.paste = ["1", "true", "yes"].includes(String(value).toLowerCase())
+  writePresets(presets)
 }
 
 function add() {
@@ -337,6 +425,7 @@ function run(argv) {
     edit: () => editorSheet(),
     load: () => ({ update: { ids: fieldUpdates(readPresets().find(preset => preset.id === args[0])) } }),
     save: () => save(...args),
+    option: () => setOption(...args),
     add: () => add(),
     delete: () => remove(args[0]),
     move: () => move(...args)

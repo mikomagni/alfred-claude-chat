@@ -1,0 +1,29 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Send a chat to the Trash, along with the files attached to its messages
+
+function run(argv) {
+  const chatFile = argv[0]
+  if (!chatFile) return
+
+  const fileManager = $.NSFileManager.defaultManager
+  const trash = path => fileManager.trashItemAtURLResultingItemURLError($.NSURL.fileURLWithPath(path), undefined, undefined)
+
+  const dataDir = $.NSProcessInfo.processInfo.environment.objectForKey("alfred_workflow_data").js
+  const attachmentsDir = `${dataDir}/attachments/`
+
+  let chat = []
+  try {
+    chat = JSON.parse($.NSString.stringWithContentsOfFileEncodingError(chatFile, $.NSUTF8StringEncoding, undefined).js)
+  } catch {}
+
+  // Each attachment lives in its own folder inside the attachments folder. Only those are touched
+  const folders = new Set(chat
+    .flatMap(message => message.attachments || [])
+    .map(attachment => attachment.path || "")
+    .filter(path => path.startsWith(attachmentsDir))
+    .map(path => attachmentsDir + path.slice(attachmentsDir.length).split("/")[0]))
+
+  folders.forEach(folder => { if (fileManager.fileExistsAtPath(folder)) trash(folder) })
+  trash(chatFile)
+}

@@ -1,0 +1,75 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Paste the last reply into the app you came from, replacing any selected text there.
+//
+//   paste-reply <chat file>      From the chat window: copy the reply, ask Alfred to paste, close the window
+//   paste-reply verify <token>   From the workflow: check the request really came from the chat window
+//
+// The window can't press keys in another app, so Alfred does it: the window opens the
+// workflow's "paste_reply" External Trigger, which presses ⌘V after the window has closed.
+// That trigger can be opened by any link, so the window leaves a one-time token for it to check.
+// Without a fresh, matching token nothing is pasted.
+
+ObjC.import("AppKit")
+
+const TOKEN_LIFETIME_SECONDS = 10
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function tokenFile() {
+  return `${envVar("alfred_workflow_cache")}/paste-token.txt`
+}
+
+function verify(token) {
+  const fileManager = $.NSFileManager.defaultManager
+  const path = tokenFile()
+
+  const saved = $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
+  const modified = fileManager.attributesOfItemAtPathError(path, undefined).js?.NSFileModificationDate?.js
+  fileManager.removeItemAtPathError(path, undefined) // One use only
+
+  const fresh = modified && (new Date().getTime() - modified.getTime()) < TOKEN_LIFETIME_SECONDS * 1000
+  return saved && token && saved === token && fresh ? "paste" : ""
+}
+
+function run(argv) {
+  if (argv[0] === "verify") return verify(argv[1])
+
+  const chatFile = argv[0]
+  const cacheDir = envVar("alfred_workflow_cache")
+  const fileManager = $.NSFileManager.defaultManager
+  const nothingToPaste = JSON.stringify({ sound: { src: "Basso" } })
+
+  // Not while a reply is still arriving
+  if (!chatFile || fileManager.fileExistsAtPath(`${cacheDir}/stream.txt`)) return nothingToPaste
+
+  let chat
+  try {
+    chat = JSON.parse($.NSString.stringWithContentsOfFileEncodingError(chatFile, $.NSUTF8StringEncoding, undefined).js)
+  } catch { return nothingToPaste }
+
+  // Only a reply to the latest question counts
+  const last = chat[chat.length - 1]
+  if (last?.role !== "assistant" || !last.content?.trim()) return nothingToPaste
+
+  // The reply goes on the clipboard here, so it is there even if the paste doesn't happen
+  const pasteboard = $.NSPasteboard.generalPasteboard
+  pasteboard.clearContents
+  pasteboard.setStringForType(last.content.trim(), "public.utf8-plain-text")
+
+  const token = $.NSUUID.UUID.UUIDString.js
+  $(token).writeToFileAtomicallyEncodingError(tokenFile(), true, $.NSUTF8StringEncoding, undefined)
+
+  // -g: don't bring Alfred forward, the app you came from should be in front for the paste
+  const task = $.NSTask.alloc.init
+  task.executableURL = $.NSURL.fileURLWithPath("/usr/bin/open")
+  task.arguments = ["-g", `alfred://runtrigger/${envVar("alfred_workflow_bundleid")}/paste_reply/?argument=${token}`]
+  task.launchAndReturnError(false)
+
+  return JSON.stringify({ finish: {} })
+}

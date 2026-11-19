@@ -79,6 +79,8 @@ function run(argv) {
       deleteAllButton: { enabled: false },
       presetsButton: { enabled: false },
       regenerateButton: { enabled: false },
+      pasteReplyButton: { enabled: false },
+      attachButton: { enabled: false },
       chatList: { enabled: false },
       promptField: { enabled: false }
     }}
