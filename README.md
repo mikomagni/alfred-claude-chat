@@ -26,6 +26,7 @@ That is all most people need. The rest is optional and lives in the [Workflow’
 | `API Key` | Leave empty to use the Claude account you're logged in to in Claude Code. Set a Claude API key to pay per use through the [Claude Console](https://platform.claude.com) instead. |
 | `Model` | The model new chats start with. |
 | `Custom Instructions` | Standing instructions for every chat, such as "Use Australian English" or "Keep answers short". They are added to the workflow's own instructions and take effect from the next message. |
+| `Web Access` | Let Claude search the web and read pages when a question needs it. On by default. See [Web access](#web-access). |
 | `Chat Keyword` | The keyword that opens the chat window. Defaults to `claude`. |
 | `External` | Open the chat in a separate window rather than inside Alfred. |
 | `Fallback Context` | How many earlier messages to resend if a chat's Claude Code session can no longer be found. |
@@ -72,6 +73,12 @@ Claude thinks before answering when a question needs it. Effort sets how much: h
 The level applies to every chat until you change it. To try a reply again more carefully, raise the effort and press <kbd>⌘</kbd><kbd>R</kbd>.
 
 While Claude thinks, the chat shows Thinking… with the seconds counting up. Claude Code doesn't pass on the thinking itself, so the time is all the window can show.
+
+### Web access
+
+Claude can search the web and read pages, for questions about recent events, prices, documentation and anything else it wouldn't know. It decides when a question needs a search, so everyday chats are just as quick. While it works, the chat shows the search it's running or the site it's reading.
+
+Web pages are written by strangers, and a page can contain text meant to steer Claude. Claude is told to treat pages as information, not instructions, and can't run commands or change files in this window, so a page can't do anything to your Mac. If you'd rather keep chats offline, for example when you paste in private text, untick `Web Access` in the workflow's configuration.
 
 ### Ask Claude from anywhere
 
@@ -141,7 +148,7 @@ Audio, video and other files Claude can't read are refused with a message saying
 
 ## Good to know
 
-* Claude has no tools in this window: no shell, no web, and no access to your files beyond what you attach. Your MCP servers are not started for these chats.
+* Apart from web search, Claude has no tools in this window: no shell, and no access to your files beyond what you attach. Your MCP servers are not started for these chats.
 * Text files over 200 KB and zip archives are too big to send whole. In a chat with one of those, Claude gets read-only tools limited to the workflow's attachments folder, and reads or searches the file itself.
 * Attachments are copied into the workflow's data folder and go to the Trash with their chat.
 * Pasting a reply back works by the chat window asking Alfred to press <kbd>⌘</kbd><kbd>V</kbd> through the workflow's `paste_reply` External Trigger. The trigger checks a one-time token, so opening its link from anywhere else does nothing.

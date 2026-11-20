@@ -90,26 +90,82 @@ function runScript(name, args) {
   return $.NSString.alloc.initWithDataEncoding(dataOut, $.NSUTF8StringEncoding).js
 }
 
-// The line shown until the reply starts. Thinking counts the seconds from when it began,
-// which the first pulse to see it notes in a "thinking" file
-function statusLine(blockTypes) {
-  if (blockTypes.includes("thinking")) {
-    const thinkingFile = `${envVar("alfred_workflow_cache")}/thinking`
-    const now = new Date().getTime()
-    let started = parseInt($.NSString.stringWithContentsOfFileEncodingError(thinkingFile, $.NSUTF8StringEncoding, undefined).js)
-    if (!(started > 0)) {
-      started = now
-      $(String(now)).writeToFileAtomicallyEncodingError(thinkingFile, true, $.NSUTF8StringEncoding, undefined)
-    }
-
-    if (blockTypes[blockTypes.length - 1] !== "tool_use") {
-      const seconds = Math.floor((now - started) / 1000)
-      if (seconds < 1) return "*Thinking…*"
-      return seconds < 60 ? `*Thinking… ${seconds}s*` : `*Thinking… ${Math.floor(seconds / 60)}m ${seconds % 60}s*`
-    }
+// A reply can take several steps: Claude writes a little, uses a tool, then carries on in a
+// new message once the tool is done. Split the stream into those messages
+function streamMessages(events) {
+  const messages = []
+  const current = () => {
+    if (messages.length === 0) messages.push({ text: "", blocks: [] })
+    return messages[messages.length - 1]
   }
 
-  return blockTypes.includes("tool_use") ? "*Reading the attached files…*" : "*Thinking…*"
+  for (const item of events) {
+    if (item.type !== "stream_event") continue
+    const event = item.event || {}
+
+    if (event.type === "message_start") messages.push({ text: "", blocks: [] })
+    else if (event.type === "content_block_start") current().blocks.push(event.content_block || {})
+    else if (event.type === "content_block_delta" && event.delta?.type === "text_delta") current().text += event.delta.text
+  }
+
+  return messages
+}
+
+// The tool Claude is using right now, if any: one that has started and has no result yet.
+// Its input (the search, the page) arrives in full once Claude has finished writing it
+function runningTool(events) {
+  const lastResult = events.findLastIndex(item => item.type === "user")
+  const lastStart = events.findLastIndex(item => item.type === "stream_event"
+    && item.event?.type === "content_block_start" && item.event.content_block?.type === "tool_use")
+  if (lastStart < 0 || lastStart < lastResult) return
+
+  const tool = events[lastStart].event.content_block
+  const written = events.slice(lastStart)
+    .filter(item => item.type === "assistant")
+    .flatMap(item => item.message?.content || [])
+    .find(block => block.type === "tool_use" && block.id === tool.id)
+
+  return written || tool
+}
+
+function toolStatus(tool) {
+  const plain = text => String(text || "").replace(/[\\`*_\[\]<>]/g, "").replace(/\s+/g, " ").trim()
+
+  if (tool.name === "WebSearch") {
+    const query = plain(tool.input?.query)
+    if (!query) return "*Searching the web…*"
+    return `*Searching the web for “${query.length > 60 ? `${query.slice(0, 60).trim()}…` : query}”…*`
+  }
+
+  if (tool.name === "WebFetch") {
+    let host
+    try { host = $.NSURL.URLWithString(tool.input.url).host.js } catch {}
+    return host ? `*Reading ${plain(host.replace(/^www\./, ""))}…*` : "*Reading a web page…*"
+  }
+
+  if (["Read", "Grep", "Glob"].includes(tool.name)) return "*Reading the attached files…*"
+  return "*Working…*"
+}
+
+// The line shown while Claude isn't writing: what the tool is doing, or how long Claude has
+// been thinking. The first pulse to see a message's thinking notes when it began in a
+// "thinking" file, so the count starts again after each tool
+function statusLine(message, messageNumber, tool) {
+  if (tool) return toolStatus(tool)
+  if (!message?.blocks.some(block => block.type === "thinking")) return "*Thinking…*"
+
+  const thinkingFile = `${envVar("alfred_workflow_cache")}/thinking`
+  const now = new Date().getTime()
+  const [noted, since] = ($.NSString.stringWithContentsOfFileEncodingError(thinkingFile, $.NSUTF8StringEncoding, undefined).js || "").split(" ")
+  let started = parseInt(since)
+  if (parseInt(noted) !== messageNumber || !(started > 0)) {
+    started = now
+    $(`${messageNumber} ${now}`).writeToFileAtomicallyEncodingError(thinkingFile, true, $.NSUTF8StringEncoding, undefined)
+  }
+
+  const seconds = Math.floor((now - started) / 1000)
+  if (seconds < 1) return "*Thinking…*"
+  return seconds < 60 ? `*Thinking… ${seconds}s*` : `*Thinking… ${Math.floor(seconds / 60)}m ${seconds % 60}s*`
 }
 
 // Main
@@ -141,23 +197,22 @@ function run(argv) {
     ? { role: "assistant", content, session_id: sessionId }
     : { role: "assistant", content }
 
-  const responseText = events
-    .filter(item => item.type === "stream_event"
-      && item.event?.type === "content_block_delta"
-      && item.event.delta?.type === "text_delta")
-    .map(item => item.event.delta.text)
-    .join("")
-
-  // What Claude is doing before the reply starts: thinking, or reading files with a tool
-  const blockTypes = events
-    .filter(item => item.type === "stream_event" && item.event?.type === "content_block_start")
-    .map(item => item.event.content_block?.type)
+  // The newest text Claude has written. Words before a search ("I'll look that up") show
+  // while the search runs, and the answer that follows replaces them
+  const messages = streamMessages(events)
+  const lastMessage = messages[messages.length - 1]
+  const responseText = messages.findLast(message => message.text.trim())?.text || ""
+  const tool = runningTool(events)
+  const writing = !tool && lastMessage?.blocks[lastMessage.blocks.length - 1]?.type === "text"
+    && Boolean(lastMessage.text.trim())
 
   const result = events.find(item => item.type === "result")
 
   // Still streaming
   if (!result) {
-    const stalled = new Date().getTime() - fileModified(streamFile) > timeoutSeconds * 1000
+    // Claude Code writes nothing while a tool runs, and a slow web page can take a while
+    const allowedSeconds = tool ? Math.max(timeoutSeconds, 120) : timeoutSeconds
+    const stalled = new Date().getTime() - fileModified(streamFile) > allowedSeconds * 1000
 
     if (stalled) {
       if (responseText.length > 0) appendChat(chatFile, assistantMessage(responseText))
@@ -181,10 +236,12 @@ function run(argv) {
 
     if (streamString.length === 0) return
 
-    // Claude Code has started but hasn't written anything yet
+    // Writing shows the text so far. Otherwise a status line, under any earlier words
+    const shown = safeMarkdown(responseText)
+    const status = statusLine(lastMessage, messages.length, tool)
     return JSON.stringify({ update: { ids: { chatArea: {
       behaviour: { mode: "replacelast", scroll: "end" },
-      text: safeMarkdown(responseText).trim() ? safeMarkdown(responseText) : statusLine(blockTypes)
+      text: writing ? shown : shown.trim() ? `${shown.trimEnd()}\n\n${status}` : status
     }}}})
   }
 

@@ -646,6 +646,8 @@ Each chat keeps its own Claude Code session, so follow-up questions have the ful
 
 The gauge next to the model menu (⌘T) sets the effort: how hard Claude thinks before answering, from Low (fastest) to Max (most thorough). Default uses your Claude Code setting. While Claude thinks, the chat counts the seconds.
 
+Claude can search the web and read pages when a question needs it, and the chat shows what it's looking up. Untick Web Access in the configuration to keep chats offline.
+
 Search your chats with the box above the list (⌘F), right-click a chat to copy, export or delete it (⌘E exports the open chat as Markdown), and move between chats with ⌘] and ⌘[.</string>
 	<key>uidata</key>
 	<dict>
@@ -916,6 +918,25 @@ Search your chats with the box above the list (⌘F), right-click a chat to copy
 			<key>config</key>
 			<dict>
 				<key>default</key>
+				<true/>
+				<key>required</key>
+				<false/>
+				<key>text</key>
+				<string>Let Claude search the web and read pages</string>
+			</dict>
+			<key>description</key>
+			<string>Claude searches only when a question needs it. Untick to keep chats offline.</string>
+			<key>label</key>
+			<string>Web Access</string>
+			<key>type</key>
+			<string>checkbox</string>
+			<key>variable</key>
+			<string>web_access</string>
+		</dict>
+		<dict>
+			<key>config</key>
+			<dict>
+				<key>default</key>
 				<string>claude</string>
 				<key>placeholder</key>
 				<string></string>
@@ -1009,7 +1030,7 @@ Search your chats with the box above the list (⌘F), right-click a chat to copy
 		<string>custom_instructions</string>
 	</array>
 	<key>version</key>
-	<string>1.5</string>
+	<string>1.6</string>
 	<key>webaddress</key>
 	<string>https://github.com/mikomagni/alfred-claude-chat</string>
 </dict>
