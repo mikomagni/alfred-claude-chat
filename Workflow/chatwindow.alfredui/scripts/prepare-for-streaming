@@ -113,6 +113,7 @@ function run(argv) {
   fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(cacheDir, true, undefined, undefined)
   fileManager.createFileAtPathContentsAttributes(`${cacheDir}/stream.txt`, undefined, undefined)
   fileManager.createFileAtPathContentsAttributes(`${cacheDir}/starting`, undefined, undefined)
+  fileManager.removeItemAtPathError(`${cacheDir}/thinking`, undefined)
 
   const response = {
     pulse: { interval: 0.1 },

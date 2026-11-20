@@ -19,6 +19,11 @@
           "type": "script",
           "src": "scripts/model-picker",
           "args": "init"
+        },
+        {
+          "type": "script",
+          "src": "scripts/effort",
+          "args": "init"
         }
       ]
     },

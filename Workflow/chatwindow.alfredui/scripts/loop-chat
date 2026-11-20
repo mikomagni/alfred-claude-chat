@@ -90,6 +90,28 @@ function runScript(name, args) {
   return $.NSString.alloc.initWithDataEncoding(dataOut, $.NSUTF8StringEncoding).js
 }
 
+// The line shown until the reply starts. Thinking counts the seconds from when it began,
+// which the first pulse to see it notes in a "thinking" file
+function statusLine(blockTypes) {
+  if (blockTypes.includes("thinking")) {
+    const thinkingFile = `${envVar("alfred_workflow_cache")}/thinking`
+    const now = new Date().getTime()
+    let started = parseInt($.NSString.stringWithContentsOfFileEncodingError(thinkingFile, $.NSUTF8StringEncoding, undefined).js)
+    if (!(started > 0)) {
+      started = now
+      $(String(now)).writeToFileAtomicallyEncodingError(thinkingFile, true, $.NSUTF8StringEncoding, undefined)
+    }
+
+    if (blockTypes[blockTypes.length - 1] !== "tool_use") {
+      const seconds = Math.floor((now - started) / 1000)
+      if (seconds < 1) return "*Thinking…*"
+      return seconds < 60 ? `*Thinking… ${seconds}s*` : `*Thinking… ${Math.floor(seconds / 60)}m ${seconds % 60}s*`
+    }
+  }
+
+  return blockTypes.includes("tool_use") ? "*Reading the attached files…*" : "*Thinking…*"
+}
+
 // Main
 function run(argv) {
   const chatFile = argv[0]
@@ -126,9 +148,10 @@ function run(argv) {
     .map(item => item.event.delta.text)
     .join("")
 
-  const readingFiles = events.some(item => item.type === "stream_event"
-    && item.event?.type === "content_block_start"
-    && item.event.content_block?.type === "tool_use")
+  // What Claude is doing before the reply starts: thinking, or reading files with a tool
+  const blockTypes = events
+    .filter(item => item.type === "stream_event" && item.event?.type === "content_block_start")
+    .map(item => item.event.content_block?.type)
 
   const result = events.find(item => item.type === "result")
 
@@ -161,7 +184,7 @@ function run(argv) {
     // Claude Code has started but hasn't written anything yet
     return JSON.stringify({ update: { ids: { chatArea: {
       behaviour: { mode: "replacelast", scroll: "end" },
-      text: safeMarkdown(responseText).trim() ? safeMarkdown(responseText) : (readingFiles ? "*Reading the attached files…*" : "*Thinking…*")
+      text: safeMarkdown(responseText).trim() ? safeMarkdown(responseText) : statusLine(blockTypes)
     }}}})
   }
 

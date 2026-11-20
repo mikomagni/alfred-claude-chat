@@ -49,7 +49,7 @@ function run(argv) {
   if (argv[0] === "launch") {
     const fileManager = $.NSFileManager.defaultManager
     const cacheDir = envVar("alfred_workflow_cache")
-    ;["stream.txt", "pid.txt", "starting", "autopaste"].forEach(file => fileManager.removeItemAtPathError(`${cacheDir}/${file}`, undefined))
+    ;["stream.txt", "pid.txt", "starting", "thinking", "autopaste"].forEach(file => fileManager.removeItemAtPathError(`${cacheDir}/${file}`, undefined))
 
   }
 

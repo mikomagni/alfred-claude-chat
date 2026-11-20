@@ -1,0 +1,96 @@
+#!/usr/bin/osascript -l JavaScript
+
+// Effort: how hard Claude thinks before it answers (Claude Code's --effort).
+// The level chosen in the chat window is kept in effort.txt in the workflow's cache folder.
+//
+//   init           Show the saved level on the button when the window opens
+//   menu           The effort menu in the chat window
+//   set <level>    Remember a level. "default" leaves it to your Claude Code settings
+
+// The needle goes up with the level
+const LEVELS = [
+  { value: "low", name: "Low", menu: "Low (fastest)", symbol: "gauge.with.dots.needle.0percent" },
+  { value: "medium", name: "Medium", symbol: "gauge.with.dots.needle.33percent" },
+  { value: "high", name: "High", symbol: "gauge.with.dots.needle.50percent" },
+  { value: "xhigh", name: "Extra High", symbol: "gauge.with.dots.needle.67percent" },
+  { value: "max", name: "Max", menu: "Max (slowest, most thorough)", symbol: "gauge.with.dots.needle.100percent" }
+]
+
+function envVar(varName) {
+  return $.NSProcessInfo
+    .processInfo
+    .environment
+    .objectForKey(varName).js
+}
+
+function readFile(path) {
+  return $.NSString.stringWithContentsOfFileEncodingError(path, $.NSUTF8StringEncoding, undefined).js
+}
+
+function savedEffort() {
+  const saved = (readFile(`${envVar("alfred_workflow_cache")}/effort.txt`) || "").trim()
+  return LEVELS.some(level => level.value === saved) ? saved : "default"
+}
+
+// The level Claude Code uses when none is chosen here, if it's set:
+// CLAUDE_CODE_EFFORT_LEVEL, then effortLevel in Claude Code's settings
+function claudeCodeEffort() {
+  const settingsFile = $(`${envVar("CLAUDE_CONFIG_DIR") || "~/.claude"}/settings.json`).stringByExpandingTildeInPath.js
+  let fromSettings
+  try { fromSettings = JSON.parse(readFile(settingsFile)).effortLevel } catch {}
+
+  const value = envVar("CLAUDE_CODE_EFFORT_LEVEL") || fromSettings
+  return LEVELS.find(level => level.value === value)
+}
+
+function defaultName() {
+  const level = claudeCodeEffort()
+  return level ? `Default (${level.name})` : "Default"
+}
+
+function buttonUpdate(effort) {
+  const level = LEVELS.find(level => level.value === effort)
+  const shown = level || claudeCodeEffort()
+  const name = level ? level.name : defaultName()
+
+  return { effortButton: {
+    image: { type: "symbol", src: shown ? shown.symbol : "gauge.with.dots.needle.bottom.50percent" },
+    tooltip: `Effort: ${name}. How hard Claude thinks before answering ⌘T`
+  }}
+}
+
+function menu() {
+  const current = savedEffort()
+  const item = (text, value) => ({
+    text,
+    state: value === current ? "on" : "off",
+    action: { type: "script", src: "scripts/effort", args: ["set", value] }
+  })
+
+  return { popupmenu: {
+    src: "effortButton",
+    menu: [item(defaultName(), "default"), { type: "separator" }]
+      .concat(LEVELS.map(level => item(level.menu || level.name, level.value)))
+  }}
+}
+
+function set(effort) {
+  const value = LEVELS.some(level => level.value === effort) ? effort : "default"
+  const cacheDir = envVar("alfred_workflow_cache")
+  $.NSFileManager.defaultManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(cacheDir, true, undefined, undefined)
+  $(value).writeToFileAtomicallyEncodingError(`${cacheDir}/effort.txt`, true, $.NSUTF8StringEncoding, undefined)
+
+  return { update: { ids: { ...buttonUpdate(value), promptField: { focus: true } } } }
+}
+
+function run(argv) {
+  const [mode, value] = argv
+
+  const response = {
+    init: () => ({ update: { ids: buttonUpdate(savedEffort()) } }),
+    menu: () => menu(),
+    set: () => set(value)
+  }[mode]?.()
+
+  if (response) return JSON.stringify(response)
+}

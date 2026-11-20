@@ -47,17 +47,31 @@ To pay per use instead, paste a key into `API Key`. Claude Code still needs to b
 
 Open the chat window with the `claude` keyword, or set a [Hotkey](https://www.alfredapp.com/help/workflows/triggers/hotkey/) for faster triggering. Type text after the keyword to start a new chat with it.
 
-![The Claude Chat window, with the chat list on the left and a conversation about an attached photo on the right](Workflow/images/about/chatui.png)
+![The Claude Chat window, with the chat list on the left and a conversation about an attached photo on the right](Workflow/images/about/chatui-1.5.png)
 
 * <kbd>↩</kbd> sends your message. While Claude is answering, the send button becomes a stop button.
-* The regenerate button next to it asks the last question again and replaces the reply. Change the model first to get a second opinion.
+* The regenerate button next to it asks the last question again and replaces the reply. Change the model or the effort first to get a second opinion.
 * The paperclip attaches files to your next message. See [Attachments](#attachments).
 * The paste button puts the last reply into the app you came from. See [Ask Claude from anywhere](#ask-claude-from-anywhere).
 * The search box above the chat list filters chats as you type.
 * Each chat in the sidebar has buttons to copy the last message and to delete the chat. Right-click a chat for the same actions, and to copy or export the whole chat as Markdown. Exporting asks where to save the file.
 * The model dropdown in the chat window switches model. You can change it between messages in the same chat.
+* The gauge next to the model dropdown sets the effort: how hard Claude thinks before answering. See [Effort](#effort).
 
 Each chat keeps its own Claude Code session, so follow-up questions see the whole conversation as real turns rather than a pasted transcript.
+
+### Effort
+
+Claude thinks before answering when a question needs it. Effort sets how much: higher levels think for longer and get hard questions right more often, lower ones answer sooner. Choose a level from the gauge next to the model dropdown, or press <kbd>⌘</kbd><kbd>T</kbd>.
+
+* `Low` suits quick rewrites, spelling fixes and short answers.
+* `Medium` and `High` suit everyday questions and ones that take some working out.
+* `Extra High` and `Max` are for hard problems, such as maths, logic or tricky code. Max can think for half a minute or more.
+* `Default` leaves it to Claude Code. When a level is set there, with Claude Code's `/effort` command, the menu shows which, such as Default (High).
+
+The level applies to every chat until you change it. To try a reply again more carefully, raise the effort and press <kbd>⌘</kbd><kbd>R</kbd>.
+
+While Claude thinks, the chat shows Thinking… with the seconds counting up. Claude Code doesn't pass on the thinking itself, so the time is all the window can show.
 
 ### Ask Claude from anywhere
 
@@ -77,12 +91,13 @@ In the chat window, choose one from the Presets menu. The button shows its name,
 
 To add, change, reorder or delete presets, choose Edit Presets… from the same menu.
 
-Each preset has two options in the editor:
+Each preset has three options in the editor:
 
 * `Model` answers with a particular model whenever the preset is used, such as Haiku for quick spelling fixes. Leave it on Same as the chat to use the model chosen in the chat window.
+* `Effort` sets how hard Claude thinks for the preset, such as Low for spelling fixes and High for Explain simply. Leave it on Same as the chat to use the level chosen in the chat window.
 * `Paste the reply back automatically` skips the last step when the preset is used through `Ask Claude`: as soon as Claude has answered, the chat window closes and the reply replaces the text you had selected. It suits presets that return only the finished text. If the reply isn't what you wanted, undo in the app you pasted into.
 
-![The presets editor, with the list of presets on the left and the selected preset's name, instruction, model and paste-back option on the right](Workflow/images/about/presetseditor.png)
+![The presets editor, with the list of presets on the left and the selected preset's name, instruction, model, effort and paste-back option on the right](Workflow/images/about/presetseditor-1.5.png)
 
 ### Attachments
 
@@ -114,6 +129,7 @@ Audio, video and other files Claude can't read are refused with a message saying
 | <kbd>⌘</kbd><kbd>N</kbd> | New chat |
 | <kbd>⌘</kbd><kbd>F</kbd> | Search chats |
 | <kbd>⌘</kbd><kbd>P</kbd> | Presets menu |
+| <kbd>⌘</kbd><kbd>T</kbd> | Effort menu |
 | <kbd>⌘</kbd><kbd>R</kbd> | Regenerate the last reply |
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>C</kbd> | Copy the last reply |
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>↩</kbd> | Paste the last reply into the app you came from, and close |

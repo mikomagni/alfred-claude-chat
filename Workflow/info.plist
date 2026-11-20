@@ -634,7 +634,7 @@ Launch the chat window with the `claude` keyword or the Hotkey. Type text after 
 
 To use Claude from anywhere, select text or files and choose the Ask Claude Universal Action, or set the second Hotkey to send the current selection. Then pick a preset, such as Fix spelling and grammar or Summarise, and the chat opens with the answer on its way. Pick Ask Claude to open a chat with the text and type your own question.
 
-In the chat window, choose a preset from the Presets menu (⌘P) and your next message is sent with it. Choose Edit Presets… there to add, change, reorder or delete presets. A preset can have its own model, and can paste its reply back automatically when used through Ask Claude.
+In the chat window, choose a preset from the Presets menu (⌘P) and your next message is sent with it. Choose Edit Presets… there to add, change, reorder or delete presets. A preset can have its own model and effort, and can paste its reply back automatically when used through Ask Claude.
 
 The regenerate button (⌘R) asks the last question again and replaces the reply. ⌘⇧C copies the last reply.
 
@@ -643,6 +643,8 @@ Attach up to 10 files to a message with the paperclip, or press ⌘⇧V to attac
 ⌘⇧↩ pastes the last reply into the app you came from, replacing the text you had selected, and closes the chat window.
 
 Each chat keeps its own Claude Code session, so follow-up questions have the full conversation. You can switch models between messages.
+
+The gauge next to the model menu (⌘T) sets the effort: how hard Claude thinks before answering, from Low (fastest) to Max (most thorough). Default uses your Claude Code setting. While Claude thinks, the chat counts the seconds.
 
 Search your chats with the box above the list (⌘F), right-click a chat to copy, export or delete it (⌘E exports the open chat as Markdown), and move between chats with ⌘] and ⌘[.</string>
 	<key>uidata</key>
@@ -1007,7 +1009,7 @@ Search your chats with the box above the list (⌘F), right-click a chat to copy
 		<string>custom_instructions</string>
 	</array>
 	<key>version</key>
-	<string>1.4</string>
+	<string>1.5</string>
 	<key>webaddress</key>
 	<string>https://github.com/mikomagni/alfred-claude-chat</string>
 </dict>

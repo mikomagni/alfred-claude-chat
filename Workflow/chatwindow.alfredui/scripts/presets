@@ -9,7 +9,7 @@
 //   edit                       Open the editor sheet
 //   load <id>                  Show a preset in the editor
 //   save <id> <name> <prompt> [refresh]
-//   option <id> model|paste <value>   Change one of a preset's options
+//   option <id> model|effort|paste <value>   Change one of a preset's options
 //   add | delete <id> | move <id> up|down
 
 const DEFAULTS = [
@@ -57,9 +57,16 @@ function usable(presets) {
 
 // What travels with a message when a preset is used.
 //   model   the model to answer with, or nothing to use the one chosen in the chat window
+//   effort  how hard Claude thinks, or nothing to use the level chosen in the chat window
 //   paste   paste the reply back as soon as it arrives (only when sent with Ask Claude)
 function presetToSend(preset) {
-  return { name: preset.name, prompt: preset.prompt, model: preset.model || "", paste: Boolean(preset.paste) }
+  return {
+    name: preset.name,
+    prompt: preset.prompt,
+    model: preset.model || "",
+    effort: preset.effort || "",
+    paste: Boolean(preset.paste)
+  }
 }
 
 // The same models as the chat window's dropdown
@@ -72,6 +79,16 @@ const MODELS = [
 
 function modelName(model) {
   return MODELS.find(([, value]) => value === model)?.[0]
+}
+
+// The same levels as the chat window's effort menu
+const EFFORTS = [
+  ["Same as the chat", "chat"],
+  ["Low", "low"], ["Medium", "medium"], ["High", "high"], ["Extra High", "xhigh"], ["Max", "max"]
+]
+
+function effortName(effort) {
+  return EFFORTS.find(([, value]) => value === effort)?.[0]
 }
 
 // Chat window menu
@@ -133,7 +150,11 @@ function filter() {
   }
 
   const presetItems = usable(readPresets()).map(preset => {
-    const options = [preset.paste && "Pastes the reply back", preset.model && modelName(preset.model)].filter(Boolean)
+    const options = [
+      preset.paste && "Pastes the reply back",
+      preset.model && modelName(preset.model),
+      preset.effort && effortName(preset.effort) && `${effortName(preset.effort)} effort`
+    ].filter(Boolean)
 
     return {
       title: preset.name,
@@ -175,6 +196,7 @@ function fieldUpdates(preset) {
     presetName: { text: preset?.name || "", enabled: Boolean(preset) },
     presetPrompt: { text: preset?.prompt || "", editable: Boolean(preset) },
     presetModel: { selected: preset?.model || "chat", enabled: Boolean(preset) },
+    presetEffort: { selected: preset?.effort || "chat", enabled: Boolean(preset) },
     presetPaste: { checked: Boolean(preset?.paste), enabled: Boolean(preset) }
   }
 }
@@ -203,6 +225,29 @@ function iconButton(symbol, tooltip, args) {
     font: { size: 14 },
     tooltip,
     events: [{ triggers: "actioned", action: scriptAction(args) }]
+  }
+}
+
+// A label and a picker for one of a preset's options. The labels are one width, so the pickers line up
+function optionRow(label, id, choices, preset, option) {
+  return {
+    constraints: { region: "top" },
+    type: "view",
+    layout: "border",
+    spacing: 8,
+    components: [
+      { constraints: { region: "left", position: "centre", size: { width: 44 } }, type: "label", text: label },
+      {
+        constraints: { region: "centre", position: "left" },
+        id,
+        type: "picker",
+        items: choices.map(([text, value]) => ({ text, value })),
+        selected: preset?.[option] || "chat",
+        enabled: Boolean(preset),
+        // These save one option only: setting them when another preset is shown can also fire "changed"
+        events: [{ triggers: "changed", action: scriptAction(["option", SELECTED, option, "{value:self.selected.value}"]) }]
+      }
+    ]
   }
 }
 
@@ -317,17 +362,8 @@ function editorSheet() {
                   layout: "border",
                   spacing: 8,
                   components: [
-                    { constraints: { region: "left", position: "centre" }, type: "label", text: "Model" },
-                    {
-                      constraints: { region: "centre", position: "left" },
-                      id: "presetModel",
-                      type: "picker",
-                      items: MODELS.map(([text, value]) => ({ text, value })),
-                      selected: first?.model || "chat",
-                      enabled: Boolean(first),
-                      // These save one option only: setting them when another preset is shown can also fire "changed"
-                      events: [{ triggers: "changed", action: scriptAction(["option", SELECTED, "model", "{value:self.selected.value}"]) }]
-                    }
+                    optionRow("Model", "presetModel", MODELS, first, "model"),
+                    { ...optionRow("Effort", "presetEffort", EFFORTS, first, "effort"), constraints: { region: "centre" } }
                   ]
                 },
                 {
@@ -380,6 +416,7 @@ function setOption(id, option, value) {
   if (!preset) return
 
   if (option === "model") preset.model = value === "chat" ? "" : (value || "")
+  if (option === "effort") preset.effort = value === "chat" ? "" : (value || "")
   if (option === "paste") preset.paste = ["1", "true", "yes"].includes(String(value).toLowerCase())
   writePresets(presets)
 }

@@ -62,6 +62,7 @@ function run(argv) {
   // Same markers as sending a message: a reply is on its way, and the first pulse shows Starting Claude…
   fileManager.createFileAtPathContentsAttributes(`${cacheDir}/stream.txt`, undefined, undefined)
   fileManager.createFileAtPathContentsAttributes(`${cacheDir}/starting`, undefined, undefined)
+  fileManager.removeItemAtPathError(`${cacheDir}/thinking`, undefined)
 
   // submit-prompt adds the question back, so the chat is cut to just before it
   writeFile(chatFile, JSON.stringify(history))

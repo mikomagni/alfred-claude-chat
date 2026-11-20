@@ -413,83 +413,116 @@
                       ]
                     },
                     {
-                      "id": "modelPicker",
                       "constraints": {
                         "region": "left"
                       },
-                      "type": "picker",
-                      "font": {
-                        "size": 13
-                      },
-                      "items": [
+                      "type": "view",
+                      "layout": "inline",
+                      "direction": "horizontal",
+                      "spacing": 4,
+                      "components": [
                         {
-                          "text": "Sonnet",
-                          "value": "sonnet"
+                          "id": "modelPicker",
+                          "type": "picker",
+                          "font": {
+                            "size": 13
+                          },
+                          "items": [
+                            {
+                              "text": "Sonnet",
+                              "value": "sonnet"
+                            },
+                            {
+                              "text": "Opus",
+                              "value": "opus"
+                            },
+                            {
+                              "text": "Haiku",
+                              "value": "haiku"
+                            },
+                            {
+                              "type": "separator"
+                            },
+                            {
+                              "text": "Fable",
+                              "value": "fable"
+                            },
+                            {
+                              "text": "Best available",
+                              "value": "best"
+                            },
+                            {
+                              "text": "Opus (1M context)",
+                              "value": "opus[1m]"
+                            },
+                            {
+                              "type": "separator"
+                            },
+                            {
+                              "text": "Opus 5",
+                              "value": "claude-opus-5"
+                            },
+                            {
+                              "text": "Sonnet 5",
+                              "value": "claude-sonnet-5"
+                            },
+                            {
+                              "text": "Opus 4.8",
+                              "value": "claude-opus-4-8"
+                            },
+                            {
+                              "text": "Fable 5",
+                              "value": "claude-fable-5"
+                            },
+                            {
+                              "type": "separator"
+                            },
+                            {
+                              "text": "Default",
+                              "value": "default"
+                            }
+                          ],
+                          "events": [
+                            {
+                              "triggers": "changed",
+                              "action": {
+                                "type": "script",
+                                "src": "scripts/model-picker",
+                                "args": [
+                                  "save",
+                                  "{value:self.selected.value}"
+                                ]
+                              }
+                            }
+                          ],
+                          "bordered": false
                         },
                         {
-                          "text": "Opus",
-                          "value": "opus"
-                        },
-                        {
-                          "text": "Haiku",
-                          "value": "haiku"
-                        },
-                        {
-                          "type": "separator"
-                        },
-                        {
-                          "text": "Fable",
-                          "value": "fable"
-                        },
-                        {
-                          "text": "Best available",
-                          "value": "best"
-                        },
-                        {
-                          "text": "Opus (1M context)",
-                          "value": "opus[1m]"
-                        },
-                        {
-                          "type": "separator"
-                        },
-                        {
-                          "text": "Opus 5",
-                          "value": "claude-opus-5"
-                        },
-                        {
-                          "text": "Sonnet 5",
-                          "value": "claude-sonnet-5"
-                        },
-                        {
-                          "text": "Opus 4.8",
-                          "value": "claude-opus-4-8"
-                        },
-                        {
-                          "text": "Fable 5",
-                          "value": "claude-fable-5"
-                        },
-                        {
-                          "type": "separator"
-                        },
-                        {
-                          "text": "Default",
-                          "value": "default"
+                          "id": "effortButton",
+                          "type": "button",
+                          "bordered": false,
+                          "font": {
+                            "size": 14
+                          },
+                          "image": {
+                            "type": "symbol",
+                            "src": "gauge.with.dots.needle.bottom.50percent"
+                          },
+                          "contenttintcolour": "secondaryLabelColor",
+                          "shortcut": "⌘T",
+                          "tooltip": "Effort: how hard Claude thinks before answering ⌘T",
+                          "events": [
+                            {
+                              "triggers": "actioned",
+                              "action": {
+                                "type": "script",
+                                "src": "scripts/effort",
+                                "args": "menu"
+                              }
+                            }
+                          ]
                         }
-                      ],
-                      "events": [
-                        {
-                          "triggers": "changed",
-                          "action": {
-                            "type": "script",
-                            "src": "scripts/model-picker",
-                            "args": [
-                              "save",
-                              "{value:self.selected.value}"
-                            ]
-                          }
-                        }
-                      ],
-                      "bordered": false
+                      ]
                     },
                     {
                       "constraints": {
@@ -613,7 +646,8 @@
                         }
                       ]
                     }
-                  ]
+                  ],
+                  "spacing": 10
                 }
               ]
             }

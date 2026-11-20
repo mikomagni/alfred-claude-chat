@@ -62,6 +62,14 @@ function currentModel(cacheDir) {
   return model === "default" ? "" : model
 }
 
+// How hard Claude thinks: the level chosen in the chat window, or nothing to leave it to Claude Code
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"]
+
+function currentEffort(cacheDir) {
+  const saved = ($.NSString.stringWithContentsOfFileEncodingError(cacheDir + "/effort.txt", $.NSUTF8StringEncoding, undefined).js || "").trim()
+  return EFFORTS.includes(saved) ? saved : ""
+}
+
 // With a preset, the instruction goes in front of the text. The chat shows the preset's name
 // above the text instead, and the chat list shows "Preset: text"
 function parsePreset(presetArg) {
@@ -205,7 +213,7 @@ function messageWithAttachments(prompt, attachments) {
   }) + "\n"
 }
 
-function startStream({ claudePath, claudeError, modelId, sessionId, prompt, attachments, readDir, streamFile, pidStreamFile, workDir }) {
+function startStream({ claudePath, claudeError, modelId, effort, sessionId, prompt, attachments, readDir, streamFile, pidStreamFile, workDir }) {
   const fileManager = $.NSFileManager.defaultManager
   fileManager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(workDir, true, undefined, undefined)
   if (!fileManager.fileExistsAtPath(streamFile)) fileManager.createFileAtPathContentsAttributes(streamFile, undefined, undefined)
@@ -251,6 +259,7 @@ function startStream({ claudePath, claudeError, modelId, sessionId, prompt, atta
   const structuredInput = messageWithAttachments(prompt, attachments || [])
   if (structuredInput) args.push("--input-format", "stream-json")
   if (modelId) args.push("--model", modelId)
+  if (effort) args.push("--effort", effort)
   if (sessionId) args.push("--resume", sessionId)
 
   const task = $.NSTask.alloc.init
@@ -299,6 +308,7 @@ function run(argv) {
     : "Couldn't find Claude Code in the usual install locations. Run `which claude` in Terminal and paste the result into Claude Path in the workflow configuration."
 
   const presetModel = parsePreset(argv[2])?.model
+  const presetEffort = parsePreset(argv[2])?.effort
 
   const previousChat = readChat(chatFile)
   // Regenerating passes the original message to send again as it was,
@@ -320,6 +330,8 @@ function run(argv) {
     claudeError,
     // A preset can name its own model. "default" means Claude Code's own choice, the same as in the dropdown
     modelId: presetModel ? (presetModel === "default" ? "" : presetModel) : currentModel(cacheDir),
+    // And its own effort, or the chat window's
+    effort: EFFORTS.includes(presetEffort) ? presetEffort : currentEffort(cacheDir),
     sessionId,
     prompt: claudePrompt,
     attachments,

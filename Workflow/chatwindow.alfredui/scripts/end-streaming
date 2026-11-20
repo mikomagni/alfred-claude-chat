@@ -31,6 +31,7 @@ function run(argv) {
   fileManager.removeItemAtPathError(pidStreamFile, undefined)
   fileManager.removeItemAtPathError(streamFile, undefined)
   fileManager.removeItemAtPathError(`${envVar("alfred_workflow_cache")}/starting`, undefined)
+  fileManager.removeItemAtPathError(`${envVar("alfred_workflow_cache")}/thinking`, undefined)
   fileManager.removeItemAtPathError(`${envVar("alfred_workflow_cache")}/autopaste`, undefined)
 
   return JSON.stringify({
